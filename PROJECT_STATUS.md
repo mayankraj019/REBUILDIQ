@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-24  
 **Project Objective:** AI-powered website analysis and reconstruction-planning platform  
-**Current Phase:** Phase 0 (Discovery, Architecture, Security Threat Model, Tech Stack Selection) — Baseline Complete
+**Current Phase:** Phase 1 (Technical Architecture & Service Decoupling Specification) — Complete
 
 ---
 
@@ -10,66 +10,51 @@
 
 | Phase | Description | Status | Verification Summary |
 |---|---|---|---|
-| **Phase 0** | Repo Discovery, Tech Stack Selection, Architecture Specification, Threat Model | **COMPLETED** | Git repo initialized; PRD, Architecture, Threat Model, ADRs, Roadmap, README, and `.env.example` created. |
-| **Phase 1** | Project Setup, Strict Design Tokens, Base Component Library | **PENDING** | Scheduled next: Next.js + Tailwind + Navy/Cream/Coral tokens + base UI components. |
-| **Phase 2** | Database Layer, Schema Migrations, Auth & Session System | PENDING | Prisma models (User, Job, Evidence, Blueprint) + auth middleware + RBAC. |
-| **Phase 3** | Secure Browser Automation Engine (Playwright + SSRF Firewall) | PENDING | DNS validation, IP blocklist, page extractor, computed styles & screenshot collector. |
+| **Phase 0** | Repo Discovery, Tech Stack Selection, Architecture Baseline, Threat Model | **COMPLETED** | Git repo initialized; PRD, initial roadmap, ADRs, README, and `.env.example` created. |
+| **Phase 1** | Technical Architecture, Service Decoupling & Database Design | **COMPLETED** | Comprehensive technical architecture across all 15 domains, ERD database design, 6-perimeter security model, deployment architecture, and ADRs 001–007 authored. |
+| **Phase 2** | Database Layer, Schema Migrations, Auth & Session System | **PENDING** | Scheduled next: Prisma schema implementation, migrations, auth route handlers, session cookies, and RBAC tests. |
+| **Phase 3** | Secure Browser Automation Engine (Playwright + SSRF Firewall) | PENDING | Pre-flight DNS validation, route-level IP verification, style/DOM extractors, multi-viewport screenshots. |
 | **Phase 4** | AI Analysis Engine, Structured Blueprint Generator, Prompt Synthesizer | PENDING | Separation of observed evidence vs inference, schema validation, Antigravity prompts. |
 | **Phase 5** | SaaS UI, Dashboard, Live Job Inspector, Artifact Review & Export | PENDING | Responsive UI matching brand palette, evidence inspector, prompt exporter. |
-| **Phase 6** | End-to-End Verification, Security Audit, Production Deployment Readiness | PENDING | Automated test suite execution, SSRF test cases, Dockerfile, deployment guide. |
+| **Phase 6** | End-to-End Verification, Security Audit, Production Readiness | PENDING | Automated test suite execution, SSRF test cases, Dockerfile, deployment runbook. |
 
 ---
 
-## 2. Implemented Functionality
+## 2. Implemented Functionality & Architecture Specifications
 
-### Phase 0 Baseline Deliverables
-- **Version Control:** Git repository initialized with strict production `.gitignore`.
-- **Product Requirements Document (PRD):** `docs/PRODUCT_REQUIREMENTS.md` detailing user personas, 7 core workflows, non-functional requirements, explicit out-of-scope boundaries, and 6 measurable acceptance criteria.
-- **Architecture Specification:** `docs/PROJECT_ARCHITECTURE.md` detailing system topology, component responsibilities, asynchronous job state machine, data contracts, and Zod schemas.
-- **Security Threat Model:** `docs/SECURITY_THREAT_MODEL.md` establishing STRIDE analysis, SSRF firewall, DNS rebinding mitigation, prompt injection defense, browser sandboxing, and multi-tenant isolation.
-- **Technical Decisions & ADRs:** `docs/TECHNICAL_DECISIONS.md` recording technical selections, evaluations, environment cost profiles, and 4 unresolved architectural questions with proposed sensible defaults.
-- **Implementation Roadmap:** `docs/IMPLEMENTATION_ROADMAP.md` scheduling deliverables and verification gates for Phases 0 through 6.
-- **Environment & Secrets Conventions:** `.env.example` defining environment variables and safe defaults.
-- **Project Documentation:** `README.md` and `docs/PROJECT_STATUS.md`.
+### Phase 1 Architecture Deliverables
+- **System Architecture (`docs/ARCHITECTURE.md`):** Complete 15-domain architecture defining frontend, backend API, auth, database, orchestration, browser worker, AI integration, background queues, artifact storage, prompt synthesis, exports, logging, deployment, testing, and cost profiles.
+- **Database Design (`docs/DATABASE_DESIGN.md`):** Relational schema with Mermaid ERD covering `User`, `Session`, `AnalysisJob`, `PageEvidence`, `VisualScreenshot`, `BlueprintArtifact`, and `JobAuditLog` with cascade deletions and multi-tenant isolation.
+- **Security Architecture (`docs/SECURITY_ARCHITECTURE.md`):** 6-perimeter defense model: SSRF firewall with full CIDR blocklist, DNS rebinding prevention, Chromium sandbox hardening, DOM sanitizer, `<untrusted_web_evidence>` prompt injection barriers, and row-level authorization.
+- **Deployment Architecture (`docs/DEPLOYMENT_ARCHITECTURE.md`):** Clear decoupling of stateless Web Service (Next.js) from compute-heavy Worker Service (Chromium + Playwright), multi-stage Dockerfile, BullMQ/Redis queue contracts, managed service matrix (Supabase, Upstash, S3/R2), and autoscaling policies.
+- **Architecture Decisions (`docs/ARCHITECTURE_DECISIONS.md`):** ADR-001 through ADR-007 formally resolving web/worker separation, BullMQ queueing, Prisma + Postgres, managed service strategy, dual-layer SSRF defense, Gemini structured outputs, and prompt injection isolation.
 
 ---
 
 ## 3. Test & Verification Results
 
-| Test Category | Suite / Check | Result | Evidence / Notes |
+| Check Category | Validation Item | Result | Evidence / Notes |
 |---|---|---|---|
-| Environment Verification | Node & NPM availability | PASSED | Node v22.12.0, npm 10.9.0 verified |
-| Repository Health | Git status & tree clean | PASSED | Clean git workspace |
-| Documentation Consistency | Cross-file review | PASSED | Internal references, design tokens, and workflows aligned across all docs |
-| Secrets Audit | Git index scan | PASSED | Zero secrets committed; `.env` excluded via `.gitignore` |
+| **Architecture Completeness** | 15 Required Domains Defined | PASSED | Documented in `docs/ARCHITECTURE.md` with subsystem specifications |
+| **Service Decoupling** | Web vs. Worker Service Separation | PASSED | Explicit service boundary matrix in `docs/DEPLOYMENT_ARCHITECTURE.md` |
+| **Data Ownership & Isolation** | Relational Multi-Tenancy | PASSED | Strict `userId` foreign key scoping and cascade deletion rules defined in `docs/DATABASE_DESIGN.md` |
+| **Security Controls** | SSRF & Prompt Injection Defenses | PASSED | Dual-layer pre-flight + socket interception; XML delimiter fencing documented in `docs/SECURITY_ARCHITECTURE.md` |
+| **Git & Secrets Hygiene** | Clean Git Tree & Zero Secret Leakage | PASSED | `.gitignore` blocking `.env`, `node_modules`, SQLite databases, screenshots |
 
 ---
 
-## 4. Security Findings & Mitigations
+## 4. Key Architectural Decisions Summary
 
-| Threat Vector | Severity | Status | Planned / Implemented Mitigation |
-|---|---|---|---|
-| SSRF / Internal Network Probing | CRITICAL | Mitigated in design | Pre-flight DNS resolution, private IP blacklist (RFC 1918/3927/6890), Playwright route-level interception on all hops |
-| DNS Rebinding | HIGH | Mitigated in design | Resolve IP before request, pin IP, validate each redirect target IP before following |
-| Prompt Injection via Target DOM | HIGH | Mitigated in design | Untrusted web data enclosed in strict JSON schema structures; system prompt isolates instructions from content |
-| Cross-Tenant Data Leakage | HIGH | Mitigated in design | Multi-tenant schema with foreign key ownership; server-side session authorization on all queries |
-| Browser Sandbox Exploitation | MEDIUM | Mitigated in design | Chromium sandbox flags, disabled local file access, restricted CPU/memory, hard execution timeouts |
-
----
-
-## 5. Outstanding External Dependencies & Credentials
-
-1. **LLM Provider API Key:**
-   - Provider: Google Gemini API (`GEMINI_API_KEY`)
-   - Fallback: Offline mock AI provider designed for deterministic, zero-cost test execution.
-2. **Database:**
-   - Local: SQLite for fast, reproducible zero-config testing and local development.
-   - Production: PostgreSQL via connection string (`DATABASE_URL`).
-3. **Browser Automation:**
-   - Playwright Chromium binaries to be installed in Phase 1 / Phase 3.
+1. **Web vs. Worker Decoupling (ADR-001):** Web runs on Next.js 15 (stateless, fast, serverless-friendly); browser automation runs in dedicated worker containers with native Chromium binaries.
+2. **Durable Asynchronous Queue (ADR-002):** BullMQ on Redis manages job claiming, retries, and PubSub for real-time Server-Sent Events (SSE).
+3. **Prisma with SQLite/Postgres (ADR-003):** SQLite for zero-config local testing; PostgreSQL in staging and production.
+4. **Managed Services Strategy (ADR-004):** Designed for Supabase (Postgres/Auth/Storage) and Upstash (Redis) without vendor lock-in.
+5. **SSRF Defense-in-Depth (ADR-005):** Pre-flight DNS check + Playwright `page.route` socket-level IP verification against private/metadata CIDR blocks.
+6. **Gemini Structured JSON (ADR-006):** Native `responseSchema` for guaranteed adherence to Zod schemas.
+7. **Prompt Injection Isolation (ADR-007):** Untrusted target web data enclosed in `<untrusted_web_evidence>` boundaries.
 
 ---
 
-## 6. Next Recommended Action
+## 5. Next Recommended Action
 
-Commit Phase 0 baseline documentation and advance to **Phase 1: Project Setup, Strict Design Tokens, and Base Component Library**.
+Commit Phase 1 architecture documentation and advance to **Phase 2: Database Layer, Schema Migrations, Auth & Session System** (or scaffold the codebase structure according to the decoupled architecture).
