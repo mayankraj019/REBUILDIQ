@@ -1,0 +1,140 @@
+// Prisma Schema for RebuildIQ (Development & Local SQLite)
+// See docs/DATABASE_DESIGN.md for entity relationships & indexes.
+// Production PostgreSQL schema is in prisma/schema.postgresql.prisma.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         String        @default("USER") // "USER" | "ADMIN"
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  sessions     Session[]
+  analysisJobs AnalysisJob[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique // SHA-256 hash of opaque token
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([sessionToken])
+  @@map("sessions")
+}
+
+model AnalysisJob {
+  id               String              @id @default(cuid())
+  userId           String
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUrl        String
+  normalizedDomain String
+  status           String              @default("PENDING") // PENDING | VALIDATING | QUEUED | INSPECTING | EXTRACTING_EVIDENCE | ANALYZING_AI | GENERATING_BLUEPRINT | COMPLETED | FAILED | CANCELLED
+  progressPercent  Int                 @default(0)
+  crawlDepth       Int                 @default(1)
+  viewportsConfig  String              // JSON serialized array: ["mobile", "tablet", "desktop"]
+  errorCode        String?
+  errorMessage     String?
+  durationMs       Int?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  pageEvidence       PageEvidence[]
+  blueprintArtifacts BlueprintArtifact[]
+  jobAuditLogs       JobAuditLog[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([normalizedDomain])
+  @@map("analysis_jobs")
+}
+
+model PageEvidence {
+  id                 String             @id @default(cuid())
+  jobId              String
+  job                AnalysisJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  pageUrl            String
+  pageTitle          String
+  metaTags           String             // JSON serialized dictionary
+  domStructure       String             // JSON serialized semantic DOM hierarchy tree
+  computedTypography String             // JSON serialized array of font tokens
+  computedColors     String             // JSON serialized palette clusters
+  computedSpacing    String             // JSON serialized layout & spacing metrics
+  detectedComponents String             // JSON serialized detected component blocks
+  domNodeCount       Int                @default(0)
+  extractedAt        DateTime           @default(now())
+
+  screenshots        VisualScreenshot[]
+
+  @@index([jobId])
+  @@map("page_evidence")
+}
+
+model VisualScreenshot {
+  id            String       @id @default(cuid())
+  evidenceId    String
+  evidence      PageEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  viewportType  String       // "MOBILE" | "TABLET" | "DESKTOP"
+  width         Int
+  height        Int
+  storageKey    String
+  fileHash      String
+  fileSizeBytes Int
+  mimeType      String       @default("image/png")
+  capturedAt    DateTime     @default(now())
+
+  @@index([evidenceId])
+  @@map("visual_screenshots")
+}
+
+model BlueprintArtifact {
+  id                    String      @id @default(cuid())
+  jobId                 String
+  job                   AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  version               String      @default("1.0.0")
+  designSystemSpec      String      // JSON serialized tokens & CSS variables
+  componentArchitecture String      // JSON serialized component hierarchy
+  stateInteractions     String      // JSON serialized interaction models
+  recommendedStack      String      // JSON serialized modern stack recommendation
+  antigravityPrompts    String      // Complete 4-phase markdown prompt pack
+  isEditedByUser        Boolean     @default(false)
+  generatedAt           DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([jobId])
+  @@map("blueprint_artifacts")
+}
+
+model JobAuditLog {
+  id        String      @id @default(cuid())
+  jobId     String
+  job       AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stage     String
+  level     String      // "INFO" | "WARN" | "ERROR"
+  message   String
+  metadata  String?     // JSON serialized contextual parameters
+  timestamp DateTime    @default(now())
+
+  @@index([jobId, timestamp])
+  @@map("job_audit_logs")
+}

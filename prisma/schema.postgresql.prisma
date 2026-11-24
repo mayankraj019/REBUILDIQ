@@ -1,0 +1,170 @@
+// Prisma Schema for RebuildIQ (Production PostgreSQL)
+// See docs/DATABASE_DESIGN.md for entity relationships & indexes.
+// Local SQLite development schema is in prisma/schema.prisma.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum JobStatus {
+  PENDING
+  VALIDATING
+  QUEUED
+  INSPECTING
+  EXTRACTING_EVIDENCE
+  ANALYZING_AI
+  GENERATING_BLUEPRINT
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ViewportType {
+  MOBILE
+  TABLET
+  DESKTOP
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         UserRole      @default(USER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  sessions     Session[]
+  analysisJobs AnalysisJob[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([sessionToken])
+  @@map("sessions")
+}
+
+model AnalysisJob {
+  id               String              @id @default(cuid())
+  userId           String
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUrl        String              @db.VarChar(2048)
+  normalizedDomain String              @db.VarChar(255)
+  status           JobStatus           @default(PENDING)
+  progressPercent  Int                 @default(0)
+  crawlDepth       Int                 @default(1)
+  viewportsConfig  Json                // ["mobile", "tablet", "desktop"]
+  errorCode        String?             @db.VarChar(50)
+  errorMessage     String?
+  durationMs       Int?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  pageEvidence       PageEvidence[]
+  blueprintArtifacts BlueprintArtifact[]
+  jobAuditLogs       JobAuditLog[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([normalizedDomain])
+  @@map("analysis_jobs")
+}
+
+model PageEvidence {
+  id                 String             @id @default(cuid())
+  jobId              String
+  job                AnalysisJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  pageUrl            String             @db.VarChar(2048)
+  pageTitle          String             @db.VarChar(500)
+  metaTags           Json
+  domStructure       Json
+  computedTypography Json
+  computedColors     Json
+  computedSpacing    Json
+  detectedComponents Json
+  domNodeCount       Int                @default(0)
+  extractedAt        DateTime           @default(now())
+
+  screenshots        VisualScreenshot[]
+
+  @@index([jobId])
+  @@map("page_evidence")
+}
+
+model VisualScreenshot {
+  id            String       @id @default(cuid())
+  evidenceId    String
+  evidence      PageEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  viewportType  ViewportType
+  width         Int
+  height        Int
+  storageKey    String       @db.VarChar(500)
+  fileHash      String       @db.VarChar(64)
+  fileSizeBytes Int
+  mimeType      String       @default("image/png") @db.VarChar(50)
+  capturedAt    DateTime     @default(now())
+
+  @@index([evidenceId])
+  @@map("visual_screenshots")
+}
+
+model BlueprintArtifact {
+  id                    String      @id @default(cuid())
+  jobId                 String
+  job                   AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  version               String      @default("1.0.0") @db.VarChar(20)
+  designSystemSpec      Json
+  componentArchitecture Json
+  stateInteractions     Json
+  recommendedStack      Json
+  antigravityPrompts    String
+  isEditedByUser        Boolean     @default(false)
+  generatedAt           DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([jobId])
+  @@map("blueprint_artifacts")
+}
+
+model JobAuditLog {
+  id        String      @id @default(cuid())
+  jobId     String
+  job       AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stage     String      @db.VarChar(50)
+  level     LogLevel
+  message   String
+  metadata  Json?
+  timestamp DateTime    @default(now())
+
+  @@index([jobId, timestamp])
+  @@map("job_audit_logs")
+}
