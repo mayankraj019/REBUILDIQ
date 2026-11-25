@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: 'RebuildIQ — AI-Powered Website Analysis & Reconstruction Platform',
   description:
     'Extract visual and structural design evidence using controlled browser automation, and generate production-grade reconstruction blueprints and Antigravity prompts.',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/brand/icon-square.png',
+  },
 };
 
 export default function RootLayout({

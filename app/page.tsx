@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowRight, ShieldCheck, Cpu, Code2, Globe } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 export default function HomePage() {
   return (
@@ -7,16 +8,15 @@ export default function HomePage() {
       {/* Navigation Header */}
       <header className="border-b border-cream-300 bg-white/80 backdrop-blur-none px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded bg-navy-500 flex items-center justify-center text-white font-bold text-sm">
-              R
-            </div>
-            <span className="font-semibold text-lg tracking-tight text-navy-500">
-              Rebuild<span className="text-coral-500">IQ</span>
-            </span>
-          </div>
+          <Logo variant="full" size="sm" asLink />
 
           <div className="flex items-center space-x-4">
+            <a
+              href="/design-system"
+              className="text-xs font-medium text-navy-500 hover:text-coral-500 transition"
+            >
+              Design System
+            </a>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cream-200 text-navy-600 border border-cream-300">
               Phase 2 Operational
             </span>
@@ -103,8 +103,11 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-cream-300 bg-white py-6 px-6 text-center text-xs text-navy-400">
-        <p>&copy; {new Date().getFullYear()} RebuildIQ. Built for production-grade website reconstruction.</p>
+      <footer className="border-t border-cream-300 bg-white py-8 px-6">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-navy-400">
+          <Logo variant="horizontal" size="xs" asLink />
+          <p>&copy; {new Date().getFullYear()} RebuildIQ. Built for production-grade website reconstruction.</p>
+        </div>
       </footer>
     </main>
   );

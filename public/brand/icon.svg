@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Head Profile Outline -->
+  <path d="M 82 92 C 82 82 81 72 85 62 C 89 52 88 40 82 30 C 76 20 65 14 52 14 C 38 14 27 22 22 35 C 20 40 21 44 19 48 C 17 52 12 55 12 57 C 14 59 18 60 19 62 C 17 64 16 66 18 68 C 20 70 24 72 23 75 C 22 79 24 83 28 86 C 34 91 42 92 45 92" 
+        stroke="#14213D" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Coral Spark / 4-Point Star -->
+  <path d="M 55 31 Q 55 49 73 49 Q 55 49 55 67 Q 55 49 37 49 Q 55 49 55 31 Z" 
+        fill="#FF6B5B" />
+</svg>

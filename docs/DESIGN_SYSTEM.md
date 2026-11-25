@@ -11,6 +11,21 @@ RebuildIQ is engineered with a **minimal, refined, and premium commercial aesthe
 | **Cream** | `#F4EDE0` | Warm primary canvas background, soft dividers, subtle card header backgrounds. | Canvas baseline |
 | **Coral** | `#FF6B5B` | Deliberate focal accents, primary call-to-actions, progress indicators, active state badges. | **3.8:1 (UI Components Pass)** |
 
+### Official Brand Logo & Lockup
+The official RebuildIQ logo embodies precision website reverse-engineering and AI-guided synthesis:
+- **Logo Mark:** Minimalist human cranium/profile outline in Navy (`#14213D`), holding a 4-point AI spark in Coral (`#FF6B5B`).
+- **Divider:** Vertical structural rule in Navy (`#14213D`).
+- **Wordmark:** Bold uppercase `REBUILD` in Navy (`#14213D`) paired with `IQ` in Coral (`#FF6B5B`).
+- **Descriptor:** Generously tracked uppercase `AI AGENT` in Navy (`#14213D`).
+- **Available Formats & Assets:**
+  - `public/brand/rebuildiq-logo.jpg` (Master high-resolution source)
+  - `public/brand/logo.png` (Transparent background lockup)
+  - `public/brand/logo-cream.png` (Cream background lockup)
+  - `public/brand/icon.png` & `public/brand/icon-square.png` (App icons and avatars)
+  - `public/brand/logo.svg` & `public/brand/icon.svg` (Infinite-scale SVG vectors)
+  - `public/favicon.ico` (Multi-resolution browser favicon: 16x16, 32x32, 48x48)
+- **Reusable Component:** `<Logo variant="full" | "horizontal" | "mark" | "text" | "image" size="xs"|"sm"|"md"|"lg"|"xl" />` in `components/ui/Logo.tsx`.
+
 ### Design Prohibitions
 - **NO Glassmorphism:** No `backdrop-blur` heavy transparencies that compromise accessibility.
 - **NO Neon Colors:** Strict avoidance of electric greens, purples, or cyan glows.

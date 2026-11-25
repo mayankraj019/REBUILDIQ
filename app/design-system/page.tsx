@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Alert } from '@/components/ui/Alert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, Column } from '@/components/ui/Table';
+import { Logo, LogoMark } from '@/components/ui/Logo';
 import {
   Globe,
   Search,
@@ -117,15 +118,8 @@ export default function DesignSystemShowcase() {
       <header className="border-b border-cream-300 bg-white px-6 py-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded bg-navy-500 flex items-center justify-center text-white font-bold text-sm">
-              R
-            </div>
-            <div>
-              <span className="font-bold text-lg tracking-tight text-navy-500">
-                Rebuild<span className="text-coral-500">IQ</span>
-              </span>
-              <span className="ml-2 text-xs text-navy-400 font-mono">/ design-system</span>
-            </div>
+            <Logo variant="full" size="sm" asLink href="/" />
+            <span className="text-xs text-navy-400 font-mono">/ design-system</span>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -195,11 +189,85 @@ export default function DesignSystemShowcase() {
           </div>
         </section>
 
-        {/* Section 2: Buttons & Interactive Triggers */}
+        {/* Section 2: Official Brand Logo & Identity Lockups */}
+        <section className="bg-white rounded-lg border border-cream-300 p-6 shadow-sm">
+          <h2 className="text-base font-bold text-navy-500 mb-2 flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-coral-500" />
+            <span>2. Official Brand Logo &amp; Identity System</span>
+          </h2>
+          <p className="text-xs text-navy-400 mb-6 max-w-2xl">
+            The RebuildIQ logo features a minimalist head profile silhouette in Navy (<code className="text-navy-500 font-bold">#14213D</code>), a 4-point AI spark in Coral (<code className="text-coral-500 font-bold">#FF6B5B</code>), a structural dividing bar, and precision typography with the uppercase &ldquo;AI AGENT&rdquo; descriptor.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Full Lockup (Cream Canvas) */}
+            <div className="bg-cream-100 rounded-lg border border-cream-300 p-5 flex flex-col justify-between items-center text-center space-y-4">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-navy-400">Full Lockup (Cream Canvas)</span>
+              <div className="py-2">
+                <Logo variant="full" size="md" />
+              </div>
+              <span className="text-[11px] text-navy-400 font-mono">variant=&quot;full&quot; size=&quot;md&quot;</span>
+            </div>
+
+            {/* Horizontal Header Lockup */}
+            <div className="bg-white rounded-lg border border-cream-300 p-5 flex flex-col justify-between items-center text-center space-y-4">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-navy-400">Horizontal Header Lockup</span>
+              <div className="py-3">
+                <Logo variant="horizontal" size="md" />
+              </div>
+              <span className="text-[11px] text-navy-400 font-mono">variant=&quot;horizontal&quot;</span>
+            </div>
+
+            {/* Icon Mark Only */}
+            <div className="bg-white rounded-lg border border-cream-300 p-5 flex flex-col justify-between items-center text-center space-y-4">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-navy-400">Brand Icon Mark (App / Favicon)</span>
+              <div className="py-1">
+                <LogoMark size={44} />
+              </div>
+              <span className="text-[11px] text-navy-400 font-mono">&lt;LogoMark size=&#123;44&#125; /&gt;</span>
+            </div>
+
+            {/* Inverted / Dark Container Lockup */}
+            <div className="bg-navy-500 rounded-lg border border-navy-600 p-5 flex flex-col justify-between items-center text-center space-y-4 text-white">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-cream-300/80">Inverted (Dark Mode / Footer)</span>
+              <div className="py-2">
+                <Logo variant="full" size="md" theme="inverted" />
+              </div>
+              <span className="text-[11px] text-cream-300/80 font-mono">theme=&quot;inverted&quot;</span>
+            </div>
+          </div>
+
+          {/* Raster Image Asset Integration */}
+          <div className="mt-6 pt-5 border-t border-cream-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded border border-cream-300 bg-cream-100 flex items-center justify-center p-1.5">
+                <LogoMark size={24} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-navy-500">Production Brand Assets in <code className="text-navy-500 font-mono">/public/brand/</code></h4>
+                <p className="text-[11px] text-navy-400">
+                  Includes <code className="font-mono">logo.png</code> (transparent), <code className="font-mono">logo-cream.png</code>, <code className="font-mono">icon.png</code>, <code className="font-mono">icon-square.png</code>, and multi-resolution <code className="font-mono">favicon.ico</code>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <a
+                href="/brand/rebuildiq-logo.jpg"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-semibold text-coral-500 hover:text-coral-600 underline underline-offset-2"
+              >
+                View High-Res Master Asset
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3: Buttons & Interactive Triggers */}
         <section className="bg-white rounded-lg border border-cream-300 p-6 shadow-sm">
           <h2 className="text-base font-bold text-navy-500 mb-4 flex items-center space-x-2">
             <Sparkles className="w-4 h-4 text-coral-500" />
-            <span>2. Button Primitives (Sizes, Variants &amp; Loading States)</span>
+            <span>3. Button Primitives (Sizes, Variants &amp; Loading States)</span>
           </h2>
 
           <div className="space-y-4">

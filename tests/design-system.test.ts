@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { tokens } from '../lib/design-system/tokens';
 
@@ -6,6 +8,16 @@ describe('RebuildIQ Design Tokens Validation', () => {
     expect(tokens.colors.brand.navy).toBe('#14213D');
     expect(tokens.colors.brand.cream).toBe('#F4EDE0');
     expect(tokens.colors.brand.coral).toBe('#FF6B5B');
+  });
+
+  it('should verify brand logo and favicon assets exist on disk', () => {
+    const publicBrandDir = path.resolve(__dirname, '../public/brand');
+    expect(fs.existsSync(path.join(publicBrandDir, 'rebuildiq-logo.jpg'))).toBe(true);
+    expect(fs.existsSync(path.join(publicBrandDir, 'logo.png'))).toBe(true);
+    expect(fs.existsSync(path.join(publicBrandDir, 'icon.png'))).toBe(true);
+    expect(fs.existsSync(path.join(publicBrandDir, 'logo.svg'))).toBe(true);
+    expect(fs.existsSync(path.join(publicBrandDir, 'icon.svg'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../public/favicon.ico'))).toBe(true);
   });
 
   it('should define accessible surface and text tokens', () => {
