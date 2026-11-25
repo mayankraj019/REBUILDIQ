@@ -1,0 +1,53 @@
+name: RebuildIQ CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    name: Build, Lint, Typecheck & Test
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: "file:./dev.db"
+      SESSION_SECRET: "ci-testing-session-secret-at-least-32-chars-long"
+      AI_PROVIDER: "mock"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client & Run SQLite Migrations
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      - name: Validate Prisma Schemas
+        run: |
+          npx prisma validate --schema prisma/schema.prisma
+          DATABASE_URL="postgresql://user:pass@localhost:5432/db" npx prisma validate --schema prisma/schema.postgresql.prisma
+
+      - name: TypeScript Type Checking
+        run: npm run typecheck
+
+      - name: Linting
+        run: npm run lint
+
+      - name: Automated Unit & Integration Tests
+        run: npm test
+
+      - name: Next.js Production Build
+        run: npm run build
