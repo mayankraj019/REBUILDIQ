@@ -68,6 +68,7 @@ export const AnalysisOverviewView: React.FC<AnalysisOverviewViewProps> = ({ job 
   const [evidenceTab, setEvidenceTab] = useState<'typography' | 'colors' | 'dom' | 'screenshots'>('typography');
   const [previewState, setPreviewState] = useState<PreviewSimulationState>('completed');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const effectiveStatus: JobStatus = job.isPreviewFixture
@@ -91,8 +92,35 @@ export const AnalysisOverviewView: React.FC<AnalysisOverviewViewProps> = ({ job 
   const handleDisconnectedJobAction = (actionName: string) => {
     setDeleteDialogOpen(false);
     setActionMessage(
-      `${actionName} requires the /api/jobs/[id] backend endpoints (scheduled for Phases 3–4). No database records were modified.`
+      `${actionName} requires the /api/jobs/[id] backend worker controls (scheduled for Phases 3–4). No database records were modified.`
     );
+  };
+
+  const handleConfirmDelete = async () => {
+    if (job.isPreviewFixture) {
+      handleDisconnectedJobAction('Preview analysis deletion');
+      return;
+    }
+
+    setIsDeleting(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.success) {
+        setDeleteDialogOpen(false);
+        setActionMessage(
+          payload?.error?.message || 'Unable to delete this analysis record.'
+        );
+        setIsDeleting(false);
+        return;
+      }
+      window.location.href = '/history';
+    } catch {
+      setDeleteDialogOpen(false);
+      setActionMessage('Network error while attempting to delete analysis record.');
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -535,7 +563,8 @@ export const AnalysisOverviewView: React.FC<AnalysisOverviewViewProps> = ({ job 
             <Button
               variant="danger"
               size="sm"
-              onClick={() => handleDisconnectedJobAction('Analysis deletion')}
+              isLoading={isDeleting}
+              onClick={handleConfirmDelete}
             >
               Confirm Delete
             </Button>

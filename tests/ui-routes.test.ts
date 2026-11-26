@@ -18,6 +18,8 @@ import { AppShell } from '../components/layout/AppShell';
 import { LandingQuickForm } from '../components/landing/LandingQuickForm';
 import { LoginForm } from '../components/auth/LoginForm';
 import { RegisterForm } from '../components/auth/RegisterForm';
+import { ForgotPasswordForm } from '../components/auth/ForgotPasswordForm';
+import { UpdatePasswordForm } from '../components/auth/UpdatePasswordForm';
 import { DashboardClient } from '../components/dashboard/DashboardClient';
 import { NewAnalysisForm } from '../components/analysis/NewAnalysisForm';
 import { HistoryClient } from '../components/history/HistoryClient';
@@ -48,6 +50,8 @@ describe('RebuildIQ Application Interface & Routing Verification', () => {
       'page.tsx',                        // 1. Landing page
       'login/page.tsx',                  // 2a. Sign-in
       'register/page.tsx',               // 2b. Account registration
+      'forgot-password/page.tsx',        // 2c. Password recovery request
+      'update-password/page.tsx',        // 2d. Password reset / update
       'dashboard/page.tsx',              // 3. Main dashboard
       'analysis/new/page.tsx',           // 4. Website-analysis creation
       'history/page.tsx',                // 5. Analysis history
@@ -172,6 +176,15 @@ describe('RebuildIQ Application Interface & Routing Verification', () => {
       React.createElement(LoginForm, { nextPath: '/dashboard' })
     );
     expect(loginHtml).toContain('Sign in to RebuildIQ');
+    expect(loginHtml).toContain('Forgot password?');
+
+    const forgotHtml = renderToStaticMarkup(React.createElement(ForgotPasswordForm));
+    expect(forgotHtml).toContain('Send Recovery Link');
+
+    const updatePwdHtml = renderToStaticMarkup(
+      React.createElement(UpdatePasswordForm, { mode: 'recovery' })
+    );
+    expect(updatePwdHtml).toContain('Set New Password');
 
     const registerHtml = renderToStaticMarkup(
       React.createElement(RegisterForm, { nextPath: '/dashboard' })
@@ -267,6 +280,8 @@ describe('RebuildIQ Application Interface & Routing Verification', () => {
     );
     expect(settingsHtml).toContain('Account Identity');
     expect(settingsHtml).toContain('Current Session');
-    expect(settingsHtml).toContain('Disconnected');
+    expect(settingsHtml).toContain('Save Profile');
+    expect(settingsHtml).toContain('Change Password');
+    expect(settingsHtml).toContain('Delete Account');
   });
 });

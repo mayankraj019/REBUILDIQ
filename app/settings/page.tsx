@@ -26,6 +26,8 @@ export default async function AccountSettingsPage() {
           name: session.user.name,
           email: session.user.email,
           role: session.user.role,
+          emailVerified: session.user.emailVerified,
+          defaultPromptTarget: session.user.defaultPromptTarget,
           createdAt: session.user.createdAt.toISOString(),
         }}
         sessions={activeSessions}

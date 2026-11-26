@@ -12,6 +12,7 @@ import {
   ViewportPreset,
 } from './types';
 import { UI_PREVIEW_FIXTURE } from './preview-fixture';
+import { isValidUuid } from '@/lib/auth/schemas';
 
 function parseJsonValue<T>(raw: Json | string | null | undefined, fallback: T): T {
   if (raw === null || raw === undefined) return fallback;
@@ -135,6 +136,10 @@ export async function loadAnalysisDetailOrNotFound(
 ): Promise<AnalysisJobDetail> {
   if (jobId === 'preview') {
     return UI_PREVIEW_FIXTURE;
+  }
+
+  if (!isValidUuid(jobId)) {
+    notFound();
   }
 
   const supabase = client ?? (await createSupabaseServerClient());

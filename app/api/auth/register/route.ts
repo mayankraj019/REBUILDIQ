@@ -1,6 +1,21 @@
 import { NextRequest } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { RegisterInputSchema } from '@/lib/auth/schemas';
+import {
+  RegisterInputSchema,
+  findForbiddenClientOwnershipFields,
+} from '@/lib/auth/schemas';
+import { mapSupabaseAuthError } from '@/lib/auth/errors';
+import {
+  extractVerifiedJwtMetadata,
+  recordLoginSessionAudit,
+} from '@/lib/auth/session-audit';
+import {
+  RATE_LIMIT_POLICIES,
+  attachRateLimitHeaders,
+  evaluateRateLimits,
+  extractClientIp,
+  rateLimitExceededResponse,
+} from '@/lib/security/rate-limit';
 import { apiSuccess, apiError } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 
@@ -8,9 +23,26 @@ const log = logger.forContext('AuthRegister');
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => null);
-    const parsed = RegisterInputSchema.safeParse(body);
+    const clientIp = extractClientIp(request);
+    const rateCheck = evaluateRateLimits([
+      { policy: RATE_LIMIT_POLICIES.AUTH_REGISTER, identifier: clientIp },
+    ]);
+    if (!rateCheck.allowed) {
+      log.warn('Registration rate limit triggered', { ip: clientIp });
+      return rateLimitExceededResponse(rateCheck);
+    }
 
+    const body = await request.json().catch(() => null);
+    const spoofedFields = findForbiddenClientOwnershipFields(body);
+    if (spoofedFields.length > 0) {
+      return apiError(
+        'FORBIDDEN',
+        'Client-supplied identity or authorization fields are not permitted',
+        403
+      );
+    }
+
+    const parsed = RegisterInputSchema.safeParse(body);
     if (!parsed.success) {
       return apiError(
         'VALIDATION_FAILED',
@@ -32,33 +64,20 @@ export async function POST(request: NextRequest) {
         data: {
           full_name: name,
         },
-        emailRedirectTo: `${origin}/auth/confirm`,
+        emailRedirectTo: `${origin}/auth/confirm?next=/dashboard`,
       },
     });
 
     if (error) {
-      const msg = error.message.toLowerCase();
-      if (
-        error.status === 422 ||
-        msg.includes('already registered') ||
-        msg.includes('already exists')
-      ) {
-        return apiError(
-          'ACCOUNT_EXISTS',
-          'An account with this email address already exists',
-          409
-        );
-      }
-
-      log.warn('Supabase registration rejected', { code: error.code, status: error.status });
-      return apiError(
-        'REGISTRATION_FAILED',
-        error.message || 'Unable to register account',
-        error.status && error.status >= 400 && error.status < 500 ? error.status : 400
-      );
+      const mapped = mapSupabaseAuthError(error, 'register');
+      log.warn('Supabase registration rejected', {
+        code: mapped.code,
+        status: mapped.statusCode,
+      });
+      return apiError(mapped.code, mapped.message, mapped.statusCode);
     }
 
-    // Supabase obfuscates existing unconfirmed/duplicate accounts with empty identities array
+    // Supabase obfuscates existing confirmed/unconfirmed duplicate emails with empty identities array
     if (
       data.user &&
       Array.isArray(data.user.identities) &&
@@ -80,24 +99,6 @@ export async function POST(request: NextRequest) {
     }
 
     const requiresEmailConfirmation = !data.session;
-
-    // If session is issued immediately, record login event in public.user_sessions (RLS enforced)
-    if (data.session) {
-      const ipAddress = request.headers.get('x-forwarded-for') ?? null;
-      const userAgent = request.headers.get('user-agent')?.slice(0, 500) ?? null;
-      const expiresAt = data.session.expires_at
-        ? new Date(data.session.expires_at * 1000).toISOString()
-        : null;
-
-      await supabase.from('user_sessions').insert({
-        user_id: data.user.id,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        auth_method: 'register',
-        expires_at: expiresAt,
-      });
-    }
-
     const response = apiSuccess(
       {
         user: {
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
           email: data.user.email || email,
           name,
           role: 'USER',
+          emailVerified: Boolean(data.user.email_confirmed_at),
           createdAt: data.user.created_at,
         },
         requiresEmailConfirmation,
@@ -112,6 +114,25 @@ export async function POST(request: NextRequest) {
       201
     );
 
+    if (data.session) {
+      const jwtMeta = await extractVerifiedJwtMetadata(
+        supabase,
+        data.session.access_token,
+        data.session.expires_at
+      );
+
+      await recordLoginSessionAudit({
+        supabase,
+        request,
+        response,
+        userId: data.user.id,
+        authSessionId: jwtMeta.authSessionId,
+        expiresAtIso: jwtMeta.expiresAt.toISOString(),
+        authMethod: 'register',
+      });
+    }
+
+    attachRateLimitHeaders(response, rateCheck);
     return applyAuthResponseHeaders(response);
   } catch (error) {
     log.error('Registration error', error);

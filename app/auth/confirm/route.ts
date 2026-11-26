@@ -1,11 +1,16 @@
 import { type EmailOtpType } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
+import {
+  extractVerifiedJwtMetadata,
+  loadSafeUserProfile,
+  recordLoginSessionAudit,
+} from '@/lib/auth/session-audit';
+import { clearAllAuthCookies } from '@/lib/auth/errors';
 
 /**
- * PKCE & Email OTP verification callback for Supabase confirmation & recovery links.
- * Supports both `?code=...` (default Supabase PKCE redirect) and `?token_hash=...&type=...`
- * (custom SSR email templates).
+ * PKCE & Email OTP verification callback for Supabase signup confirmations,
+ * email updates, and password recovery links (`/auth/confirm`).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -16,29 +21,47 @@ export async function GET(request: NextRequest) {
   const safeNext =
     rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard';
 
+  const isRecoveryFlow = type === 'recovery' || safeNext.startsWith('/update-password');
+
   const redirectTo = request.nextUrl.clone();
   redirectTo.pathname = safeNext;
-  redirectTo.searchParams.delete('code');
-  redirectTo.searchParams.delete('token_hash');
-  redirectTo.searchParams.delete('type');
-  redirectTo.searchParams.delete('next');
+  redirectTo.search = '';
+  if (isRecoveryFlow) {
+    redirectTo.searchParams.set('recovery', '1');
+  }
 
   const { supabase, applyAuthResponseHeaders } = createSupabaseRouteClient(request);
 
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
-      await supabase.from('user_sessions').insert({
-        user_id: data.user.id,
-        ip_address: request.headers.get('x-forwarded-for') ?? null,
-        user_agent: request.headers.get('user-agent')?.slice(0, 500) ?? null,
-        auth_method: 'pkce_confirm',
-        expires_at: data.session?.expires_at
-          ? new Date(data.session.expires_at * 1000).toISOString()
-          : null,
-      });
+      const loaded = await loadSafeUserProfile(supabase, data.user.id);
+      if (loaded.deleted) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        const blocked = request.nextUrl.clone();
+        blocked.pathname = '/login';
+        blocked.search = '?reason=account_deleted';
+        const res = NextResponse.redirect(blocked);
+        clearAllAuthCookies(request, res);
+        return applyAuthResponseHeaders(res);
+      }
+
+      const jwtMeta = await extractVerifiedJwtMetadata(
+        supabase,
+        data.session?.access_token,
+        data.session?.expires_at
+      );
 
       const response = NextResponse.redirect(redirectTo);
+      await recordLoginSessionAudit({
+        supabase,
+        request,
+        response,
+        userId: data.user.id,
+        authSessionId: jwtMeta.authSessionId,
+        expiresAtIso: jwtMeta.expiresAt.toISOString(),
+        authMethod: isRecoveryFlow ? 'recovery_pkce' : 'pkce_confirm',
+      });
       return applyAuthResponseHeaders(response);
     }
   } else if (tokenHash && type) {
@@ -48,23 +71,41 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error && data.user) {
-      await supabase.from('user_sessions').insert({
-        user_id: data.user.id,
-        ip_address: request.headers.get('x-forwarded-for') ?? null,
-        user_agent: request.headers.get('user-agent')?.slice(0, 500) ?? null,
-        auth_method: `otp_${type}`,
-        expires_at: data.session?.expires_at
-          ? new Date(data.session.expires_at * 1000).toISOString()
-          : null,
-      });
+      const loaded = await loadSafeUserProfile(supabase, data.user.id);
+      if (loaded.deleted) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        const blocked = request.nextUrl.clone();
+        blocked.pathname = '/login';
+        blocked.search = '?reason=account_deleted';
+        const res = NextResponse.redirect(blocked);
+        clearAllAuthCookies(request, res);
+        return applyAuthResponseHeaders(res);
+      }
+
+      const jwtMeta = await extractVerifiedJwtMetadata(
+        supabase,
+        data.session?.access_token,
+        data.session?.expires_at
+      );
 
       const response = NextResponse.redirect(redirectTo);
+      await recordLoginSessionAudit({
+        supabase,
+        request,
+        response,
+        userId: data.user.id,
+        authSessionId: jwtMeta.authSessionId,
+        expiresAtIso: jwtMeta.expiresAt.toISOString(),
+        authMethod: `otp_${type}`,
+      });
       return applyAuthResponseHeaders(response);
     }
   }
 
   const errorUrl = request.nextUrl.clone();
   errorUrl.pathname = '/login';
-  errorUrl.search = '?error=verification_failed';
+  errorUrl.search = isRecoveryFlow
+    ? '?error=recovery_expired'
+    : '?error=verification_failed';
   return NextResponse.redirect(errorUrl);
 }

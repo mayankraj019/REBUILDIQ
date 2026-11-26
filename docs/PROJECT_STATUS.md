@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **Phase 0** | Repo Discovery, Tech Stack Selection, Architecture Baseline, Threat Model | **COMPLETED** | Git repo initialized; PRD, initial roadmap, ADRs, README, and `.env.example` created. |
 | **Phase 1** | Technical Architecture, Service Decoupling & Database Design | **COMPLETED** | 15-domain architecture, ERD database design, 6-perimeter security model, deployment specs, ADRs 001–007 authored. |
-| **Phase 2 & Supabase Cloud Migration** | Supabase Auth, Postgres RLS Schema, Session Audit & Storage | **COMPLETED** | Supabase project `REBUILDIQ` (`ubnwbkcbixtbaiutrfiv`) migrated: 7 RLS-protected Postgres tables, `auth.users` sync trigger, `@supabase/ssr` cookie auth, `rebuildiq-artifacts` bucket. |
+| **Phase 2 & Production Auth/Authz** | Production Supabase Auth, Recovery, Rate Limiting, RLS Ownership & Account Retention | **COMPLETED** | Full `@supabase/ssr` auth, `/forgot-password`, `/update-password`, email verification resend, session revocation, sliding-window rate limits, server ownership APIs (`/api/jobs*`), account deletion (`DELETE /api/auth/account`), and hardening SQL migration `000002`. Guide: `docs/AUTH_CONFIGURATION.md`. |
 | **Design System & Brand** | Tokens, 14 UI Primitives, Brand Logo/Favicons, Showcase | **COMPLETED** | Navy (`#14213D`), Cream (`#F4EDE0`), Coral (`#FF6B5B`) tokens, 14 accessible UI primitives, Logo component & favicons, `/design-system` showcase. |
 | **Application Interface** | Full 11-Screen Web UI, Navigation Model & Preview Workspace | **COMPLETED** | Landing, Sign-in/Register, Dashboard, Analysis Creation, History, Details/Progress, Blueprint Viewer, Prompt Editor, Export, Settings, 404/Error boundaries. |
 | **Phase 3** | Secure Browser Automation Engine (Playwright + SSRF Firewall) | **PENDING** | Scheduled next: Pre-flight DNS validation, route-level IP verification, style/DOM extractors, multi-viewport screenshots, BullMQ/job APIs. |
@@ -37,11 +37,11 @@
   7. **Blueprint Viewer** (`app/analysis/[id]/blueprint/page.tsx`) with collapsible Component Hierarchy, Design Tokens, State/Interactions, and Recommended Stack.
   8. **Implementation-Prompt Editor** (`app/analysis/[id]/prompts/page.tsx`) with 4-phase sequence editor, clipboard copy, reset, and browser session draft saving.
   9. **Export Interface** (`app/analysis/[id]/export/page.tsx`) with preview pane and client-side Blob downloads for `.md`, `.json`, and Tailwind `.ts` configs.
-  10. **Account Settings** (`app/settings/page.tsx`) displaying verified session identity and active Prisma `Session` rows.
+  10. **Account Settings** (`app/settings/page.tsx`) with live profile/preference updates, active Supabase `user_sessions` management & revocation, password updates, and account deletion.
   11. **Not-Found & Error Boundaries** (`app/not-found.tsx`, `app/error.tsx`, `app/global-error.tsx`, `app/analysis/[id]/not-found.tsx`) + loading skeletons (`loading.tsx`).
 
 ### Disconnected Backend Boundaries
-- Live browser crawling (`POST /api/jobs`), SSE streams (`GET /api/jobs/[id]/events`), job mutations (`cancel`/`delete`), server blueprint saves (`PATCH /api/jobs/[id]/blueprint`), server ZIP archives, and user profile/password updates remain intentionally disconnected pending Phases 3–4 worker and API implementation.
+- Live browser crawling (`POST /api/jobs` worker dispatch returning `501 WORKER_NOT_CONNECTED`), SSE streams (`GET /api/jobs/[id]/events`), job cancellation (`POST /api/jobs/[id]/cancel`), and server ZIP bundles (`?format=zip`) remain intentionally disconnected pending Phases 3–4 worker implementation, while authentication, session revocation, password recovery, account deletion, job/blueprint ownership APIs (`GET`/`DELETE`, `PATCH /api/jobs/[id]/blueprint`), and artifact exports are live and RLS-enforced.
 - Real DB queries return empty lists for new accounts without injecting mock jobs; interactive UI state preview is isolated solely to `/analysis/preview/*` with a mandatory warning banner.
 
 ---

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; reason?: string; notice?: string }>;
 }) {
   const session = await getServerSession();
   const params = await searchParams;
@@ -20,10 +20,32 @@ export default async function LoginPage({
     !params.next.startsWith('//')
       ? params.next
       : '/dashboard';
-  const authErrorParam = params?.error === 'verification_failed';
 
   if (session) {
     redirect(nextPath);
+  }
+
+  let statusBanner: { variant: 'error' | 'warning' | 'success'; text: string } | null = null;
+  if (params?.error === 'verification_failed') {
+    statusBanner = {
+      variant: 'error',
+      text: 'Email verification link was invalid or expired. Try signing in or request a new confirmation email.',
+    };
+  } else if (params?.error === 'recovery_expired') {
+    statusBanner = {
+      variant: 'error',
+      text: 'Password recovery link was invalid or has expired. Please request a fresh recovery link.',
+    };
+  } else if (params?.reason === 'session_expired') {
+    statusBanner = {
+      variant: 'warning',
+      text: 'Your session expired or was signed out. Please sign in again to continue.',
+    };
+  } else if (params?.reason === 'account_deleted' || params?.notice === 'account_deleted') {
+    statusBanner = {
+      variant: 'success',
+      text: 'Your account has been deleted and all active workspace sessions were terminated.',
+    };
   }
 
   return (
@@ -42,12 +64,18 @@ export default async function LoginPage({
             </p>
           </div>
 
-          {authErrorParam && (
+          {statusBanner && (
             <div
               role="alert"
-              className="mb-5 p-3 rounded-md bg-red-50 border border-red-200 text-xs text-red-900"
+              className={`mb-5 p-3 rounded-md border text-xs ${
+                statusBanner.variant === 'error'
+                  ? 'bg-red-50 border-red-200 text-red-900'
+                  : statusBanner.variant === 'warning'
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}
             >
-              Email verification link was invalid or expired. Please try signing in or register again.
+              {statusBanner.text}
             </div>
           )}
 

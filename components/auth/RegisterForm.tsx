@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Lock, Mail, User, ArrowRight, Check } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, User, ArrowRight, Check, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -26,6 +26,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ nextPath }) => {
   }>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmationSentEmail, setConfirmationSentEmail] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const checks = [
@@ -93,12 +95,54 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ nextPath }) => {
     }
   };
 
+  const handleResendConfirmation = async () => {
+    if (!confirmationSentEmail) return;
+    setIsResending(true);
+    setResendMessage(null);
+
+    try {
+      const res = await fetch('/api/auth/resend-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: confirmationSentEmail }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (res.ok && payload?.success) {
+        setResendMessage(payload.data?.message || 'Confirmation email re-sent.');
+      } else {
+        setResendMessage(payload?.error?.message || 'Unable to resend right now. Wait a moment.');
+      }
+    } catch {
+      setResendMessage('Network error while requesting another verification link.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   if (confirmationSentEmail) {
     return (
       <div className="space-y-5">
-        <Alert variant="success" title="Account created in Supabase">
+        <Alert variant="success" title="Account created — Verify Email">
           We registered <span className="font-semibold">{confirmationSentEmail}</span> and sent a verification link to your inbox. Confirm your email address, then sign in.
         </Alert>
+
+        {resendMessage && (
+          <Alert variant="info" onClose={() => setResendMessage(null)}>
+            {resendMessage}
+          </Alert>
+        )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="md"
+          isLoading={isResending}
+          leftIcon={<RefreshCw className="w-4 h-4" />}
+          onClick={handleResendConfirmation}
+          className="w-full"
+        >
+          Resend Confirmation Email
+        </Button>
 
         <Link href="/login" className="block">
           <Button variant="primary" size="lg" className="w-full" rightIcon={<ArrowRight className="w-4 h-4" />}>

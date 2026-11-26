@@ -23,11 +23,14 @@ export const ServerEnvSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
 
-  // Storage & Supabase
+  // Storage & Supabase (Public URL + Publishable Key + Strictly Server-Only Secret Key)
   STORAGE_DRIVER: z.enum(['local', 's3', 'supabase']).default('supabase'),
   LOCAL_STORAGE_PATH: z.string().default('./storage'),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+  SUPABASE_SECRET_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  ACCOUNT_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
 
   // Crawler / Worker Guardrails
   MAX_CONCURRENT_BROWSER_JOBS: z.coerce.number().default(2),

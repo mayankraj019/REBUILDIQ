@@ -218,9 +218,11 @@ export type Database = {
       user_sessions: {
         Row: {
           auth_method: string;
+          auth_session_id: string | null;
           expires_at: string | null;
           id: string;
           ip_address: string | null;
+          last_active_at: string;
           logged_in_at: string;
           revoked_at: string | null;
           user_agent: string | null;
@@ -228,9 +230,11 @@ export type Database = {
         };
         Insert: {
           auth_method?: string;
+          auth_session_id?: string | null;
           expires_at?: string | null;
           id?: string;
           ip_address?: string | null;
+          last_active_at?: string;
           logged_in_at?: string;
           revoked_at?: string | null;
           user_agent?: string | null;
@@ -238,9 +242,11 @@ export type Database = {
         };
         Update: {
           auth_method?: string;
+          auth_session_id?: string | null;
           expires_at?: string | null;
           id?: string;
           ip_address?: string | null;
+          last_active_at?: string;
           logged_in_at?: string;
           revoked_at?: string | null;
           user_agent?: string | null;
@@ -259,6 +265,10 @@ export type Database = {
       users: {
         Row: {
           created_at: string;
+          default_prompt_target: string;
+          deleted_at: string | null;
+          deletion_reason: string | null;
+          deletion_scheduled_at: string | null;
           email: string;
           id: string;
           name: string;
@@ -267,6 +277,10 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          default_prompt_target?: string;
+          deleted_at?: string | null;
+          deletion_reason?: string | null;
+          deletion_scheduled_at?: string | null;
           email: string;
           id: string;
           name: string;
@@ -275,6 +289,10 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          default_prompt_target?: string;
+          deleted_at?: string | null;
+          deletion_reason?: string | null;
+          deletion_scheduled_at?: string | null;
           email?: string;
           id?: string;
           name?: string;
