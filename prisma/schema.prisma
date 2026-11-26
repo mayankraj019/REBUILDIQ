@@ -1,6 +1,6 @@
-// Prisma Schema for RebuildIQ (Development & Local SQLite)
-// See docs/DATABASE_DESIGN.md for entity relationships & indexes.
-// Production PostgreSQL schema is in prisma/schema.postgresql.prisma.
+// Prisma Schema for RebuildIQ (Development & Disposable Test SQLite DB)
+// See docs/DATABASE_DESIGN.md for entity relationships, data dictionary & rollback procedures.
+// Production PostgreSQL schema is in prisma/schema.postgresql.prisma and supabase/migrations/.
 
 datasource db {
   provider = "sqlite"
@@ -12,29 +12,38 @@ generator client {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  passwordHash String
-  name         String
-  role         String        @default("USER") // "USER" | "ADMIN"
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                String    @default("USER") // "USER" | "ADMIN"
+  defaultPromptTarget String    @default("antigravity") // "antigravity" | "cursor" | "claude"
+  deletedAt           DateTime?
+  deletionScheduledAt DateTime?
+  deletionReason      String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  sessions     Session[]
-  analysisJobs AnalysisJob[]
+  sessions      Session[]
+  analysisJobs  AnalysisJob[]
+  exportRecords ExportRecord[]
 
+  @@index([deletedAt])
   @@map("users")
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique // SHA-256 hash of opaque token
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt    DateTime
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
+  id            String    @id @default(cuid())
+  sessionToken  String    @unique // SHA-256 hash of opaque token
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authSessionId String?
+  ipAddress     String?
+  userAgent     String?
+  expiresAt     DateTime
+  lastActiveAt  DateTime  @default(now())
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
 
   @@index([userId, expiresAt])
   @@index([sessionToken])
@@ -42,50 +51,92 @@ model Session {
 }
 
 model AnalysisJob {
-  id               String              @id @default(cuid())
-  userId           String
-  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  targetUrl        String
-  normalizedDomain String
-  status           String              @default("PENDING") // PENDING | VALIDATING | QUEUED | INSPECTING | EXTRACTING_EVIDENCE | ANALYZING_AI | GENERATING_BLUEPRINT | COMPLETED | FAILED | CANCELLED
-  progressPercent  Int                 @default(0)
-  crawlDepth       Int                 @default(1)
-  viewportsConfig  String              // JSON serialized array: ["mobile", "tablet", "desktop"]
-  errorCode        String?
-  errorMessage     String?
-  durationMs       Int?
-  startedAt        DateTime?
-  completedAt      DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUrl          String
+  normalizedDomain   String
+  status             String    @default("PENDING") // PENDING | VALIDATING | QUEUED | INSPECTING | EXTRACTING_EVIDENCE | ANALYZING_AI | GENERATING_BLUEPRINT | COMPLETED | FAILED | CANCELLED
+  progressPercent    Int       @default(0)
+  crawlDepth         Int       @default(1)
+  viewportsConfig    String    // JSON serialized array: ["mobile", "tablet", "desktop"]
+  idempotencyKey     String?
+  workerId           String?
+  leaseExpiresAt     DateTime?
+  heartbeatAt        DateTime?
+  attemptCount       Int       @default(0)
+  maxAttempts        Int       @default(3)
+  errorCode          String?
+  errorMessage       String?
+  durationMs         Int?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  pageEvidence       PageEvidence[]
-  blueprintArtifacts BlueprintArtifact[]
-  jobAuditLogs       JobAuditLog[]
+  discoveredPages       DiscoveredPage[]
+  pageEvidence          PageEvidence[]
+  analysisResult        AnalysisResult?
+  blueprintArtifacts    BlueprintArtifact[]
+  implementationPrompts ImplementationPrompt[]
+  exportRecords         ExportRecord[]
+  jobEvents             JobEvent[]
+  jobAuditLogs          JobAuditLog[]
 
+  @@unique([userId, idempotencyKey])
   @@index([userId, status])
   @@index([userId, createdAt])
   @@index([normalizedDomain])
+  @@index([status, leaseExpiresAt, createdAt])
+  @@index([expiresAt])
   @@map("analysis_jobs")
 }
 
+model DiscoveredPage {
+  id            String       @id @default(cuid())
+  jobId         String
+  job           AnalysisJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  url           String
+  normalizedUrl String
+  depth         Int          @default(0)
+  httpStatus    Int?
+  status        String       @default("DISCOVERED") // DISCOVERED | QUEUED | INSPECTING | COMPLETED | FAILED | SKIPPED
+  isEntryPage   Boolean      @default(false)
+  errorCode     String?
+  discoveredAt  DateTime     @default(now())
+  inspectedAt   DateTime?
+
+  evidence      PageEvidence?
+
+  @@unique([jobId, normalizedUrl])
+  @@index([jobId, status])
+  @@map("discovered_pages")
+}
+
 model PageEvidence {
-  id                 String             @id @default(cuid())
-  jobId              String
-  job                AnalysisJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  pageUrl            String
-  pageTitle          String
-  metaTags           String             // JSON serialized dictionary
-  domStructure       String             // JSON serialized semantic DOM hierarchy tree
-  computedTypography String             // JSON serialized array of font tokens
-  computedColors     String             // JSON serialized palette clusters
-  computedSpacing    String             // JSON serialized layout & spacing metrics
-  detectedComponents String             // JSON serialized detected component blocks
-  domNodeCount       Int                @default(0)
-  extractedAt        DateTime           @default(now())
+  id                    String             @id @default(cuid())
+  jobId                 String
+  job                   AnalysisJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  discoveredPageId      String?            @unique
+  discoveredPage        DiscoveredPage?    @relation(fields: [discoveredPageId], references: [id], onDelete: SetNull)
+  pageUrl               String
+  pageTitle             String
+  metaTags              String             // JSON serialized dictionary
+  domStructure          String             // JSON serialized semantic DOM hierarchy tree
+  computedTypography    String             // JSON serialized array of font tokens
+  computedColors        String             // JSON serialized palette clusters
+  computedSpacing       String             // JSON serialized layout & spacing metrics
+  detectedComponents    String             // JSON serialized detected component blocks
+  domNodeCount          Int                @default(0)
+  domSnapshotStorageKey String?            // Object storage key when full DOM HTML snapshot is offloaded
+  extractedAt           DateTime           @default(now())
 
-  screenshots        VisualScreenshot[]
+  screenshots           VisualScreenshot[]
 
+  @@unique([jobId, pageUrl])
   @@index([jobId])
   @@map("page_evidence")
 }
@@ -97,32 +148,123 @@ model VisualScreenshot {
   viewportType  String       // "MOBILE" | "TABLET" | "DESKTOP"
   width         Int
   height        Int
-  storageKey    String
+  storageBucket String       @default("rebuildiq-artifacts")
+  storageKey    String       // Object storage path only (no inline binary/data URLs)
   fileHash      String
   fileSizeBytes Int
   mimeType      String       @default("image/png")
   capturedAt    DateTime     @default(now())
 
+  @@unique([evidenceId, viewportType])
   @@index([evidenceId])
   @@map("visual_screenshots")
 }
 
-model BlueprintArtifact {
-  id                    String      @id @default(cuid())
-  jobId                 String
-  job                   AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  version               String      @default("1.0.0")
-  designSystemSpec      String      // JSON serialized tokens & CSS variables
-  componentArchitecture String      // JSON serialized component hierarchy
-  stateInteractions     String      // JSON serialized interaction models
-  recommendedStack      String      // JSON serialized modern stack recommendation
-  antigravityPrompts    String      // Complete 4-phase markdown prompt pack
-  isEditedByUser        Boolean     @default(false)
-  generatedAt           DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+model AnalysisResult {
+  id                    String              @id @default(cuid())
+  jobId                 String              @unique
+  job                   AnalysisJob         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  provider              String              // "gemini" | "mock"
+  modelName             String
+  architectureSummary   String
+  detectedPatterns      String              // JSON serialized architectural pattern findings
+  designTokenSummary    String              // JSON serialized normalized design signal summary
+  evidenceCoverage      String              // JSON serialized coverage telemetry
+  confidenceScore       Float?
+  rawArtifactStorageKey String?             // Object storage reference for full raw inference payload
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
+  blueprints            BlueprintArtifact[]
+
+  @@map("analysis_results")
+}
+
+model BlueprintArtifact {
+  id                    String                 @id @default(cuid())
+  jobId                 String
+  job                   AnalysisJob            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  analysisResultId      String?
+  analysisResult        AnalysisResult?        @relation(fields: [analysisResultId], references: [id], onDelete: SetNull)
+  version               String                 @default("1.0.0")
+  designSystemSpec      String                 // JSON serialized tokens & CSS variables
+  componentArchitecture String                 // JSON serialized component hierarchy
+  stateInteractions     String                 // JSON serialized interaction models
+  recommendedStack      String                 // JSON serialized modern stack recommendation
+  antigravityPrompts    String                 // Combined markdown prompt pack snapshot
+  blueprintStorageKey   String?                // Optional object storage reference for archival export
+  isEditedByUser        Boolean                @default(false)
+  generatedAt           DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  prompts               ImplementationPrompt[]
+
+  @@unique([jobId, version])
   @@index([jobId])
+  @@index([analysisResultId])
   @@map("blueprint_artifacts")
+}
+
+model ImplementationPrompt {
+  id             String            @id @default(cuid())
+  blueprintId    String
+  blueprint      BlueprintArtifact @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  jobId          String
+  job            AnalysisJob       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  phaseNumber    Int
+  targetTool     String            @default("antigravity") // "antigravity" | "cursor" | "claude" | "generic"
+  title          String
+  objective      String
+  promptMarkdown String
+  promptHash     String
+  isEditedByUser Boolean           @default(false)
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([blueprintId, targetTool, phaseNumber])
+  @@index([jobId, targetTool])
+  @@map("implementation_prompts")
+}
+
+model ExportRecord {
+  id            String      @id @default(cuid())
+  jobId         String
+  job           AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format        String      // "prompts-md" | "blueprint-md" | "blueprint-json" | "tailwind-ts" | "evidence-json" | "zip"
+  storageKey    String?     // Object storage key when exported bundle/archive is stored
+  fileHash      String?
+  fileSizeBytes Int?
+  status        String      @default("READY") // "PENDING" | "READY" | "FAILED" | "EXPIRED"
+  expiresAt     DateTime
+  downloadedAt  DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([jobId, format])
+  @@index([expiresAt])
+  @@map("export_records")
+}
+
+model JobEvent {
+  id             String      @id @default(cuid())
+  jobId          String
+  job            AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  eventType      String      // "JOB_CREATED" | "STATUS_TRANSITION" | "WORKER_CLAIMED" | "HEARTBEAT" | "STALE_RECOVERED" | "PAGE_DISCOVERED" | "EVIDENCE_CAPTURED" | "AI_COMPLETED" | "BLUEPRINT_GENERATED" | "EXPORT_CREATED" | "JOB_CANCELLED" | "JOB_FAILED"
+  fromStatus     String?
+  toStatus       String?
+  workerId       String?
+  attemptNumber  Int         @default(0)
+  message        String
+  metadata       String?     // JSON serialized operational metadata (never sensitive tokens)
+  idempotencyKey String?
+  createdAt      DateTime    @default(now())
+
+  @@unique([jobId, idempotencyKey])
+  @@index([jobId, createdAt])
+  @@map("job_events")
 }
 
 model JobAuditLog {

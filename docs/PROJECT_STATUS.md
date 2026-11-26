@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-26  
 **Project Objective:** AI-powered website analysis and reconstruction-planning platform  
-**Current Milestone:** Main Application Interface Implemented (All 11 Screens & Navigation Shell Complete)
+**Current Milestone:** Complete Domain Database Model, Typed Repositories & Migration Suite Implemented (Ready for Phase 3 Worker Integration)
 
 ---
 
@@ -13,6 +13,7 @@
 | **Phase 0** | Repo Discovery, Tech Stack Selection, Architecture Baseline, Threat Model | **COMPLETED** | Git repo initialized; PRD, initial roadmap, ADRs, README, and `.env.example` created. |
 | **Phase 1** | Technical Architecture, Service Decoupling & Database Design | **COMPLETED** | 15-domain architecture, ERD database design, 6-perimeter security model, deployment specs, ADRs 001–007 authored. |
 | **Phase 2 & Production Auth/Authz** | Production Supabase Auth, Recovery, Rate Limiting, RLS Ownership & Account Retention | **COMPLETED** | Full `@supabase/ssr` auth, `/forgot-password`, `/update-password`, email verification resend, session revocation, sliding-window rate limits, server ownership APIs (`/api/jobs*`), account deletion (`DELETE /api/auth/account`), and hardening SQL migration `000002`. Guide: `docs/AUTH_CONFIGURATION.md`. |
+| **Domain Database Design & Repositories** | 12-Table Domain Schema, State Machine, Crash Recovery, Idempotency & Data Dictionary | **COMPLETED** | Versioned Prisma & Supabase SQL migrations (`20261126175232` & `000003` applied live on Supabase), typed `Database` types, `PrismaAnalysisRepository` & `SupabaseAnalysisRepository`, object-storage-only guards, retention purge logic, disposable SQLite DB verification (`tests/disposable-db.test.ts`), and full Data Dictionary (`docs/DATABASE_DESIGN.md`). |
 | **Design System & Brand** | Tokens, 14 UI Primitives, Brand Logo/Favicons, Showcase | **COMPLETED** | Navy (`#14213D`), Cream (`#F4EDE0`), Coral (`#FF6B5B`) tokens, 14 accessible UI primitives, Logo component & favicons, `/design-system` showcase. |
 | **Application Interface** | Full 11-Screen Web UI, Navigation Model & Preview Workspace | **COMPLETED** | Landing, Sign-in/Register, Dashboard, Analysis Creation, History, Details/Progress, Blueprint Viewer, Prompt Editor, Export, Settings, 404/Error boundaries. |
 | **Phase 3** | Secure Browser Automation Engine (Playwright + SSRF Firewall) | **PENDING** | Scheduled next: Pre-flight DNS validation, route-level IP verification, style/DOM extractors, multi-viewport screenshots, BullMQ/job APIs. |

@@ -64,9 +64,13 @@ describe('Supabase Configuration, RLS Policy Integrity, Admin Guard & Storage Se
       path.resolve(__dirname, '../supabase/migrations/20261126000002_production_auth_hardening.sql'),
       'utf8'
     );
-    const combinedSql = `${coreSql}\n${hardeningSql}`;
+    const domainSql = fs.readFileSync(
+      path.resolve(__dirname, '../supabase/migrations/20261126000003_complete_domain_data_model.sql'),
+      'utf8'
+    );
+    const combinedSql = `${coreSql}\n${hardeningSql}\n${domainSql}`;
 
-    // Verify no deprecated auth.role() policy patterns exist
+    // Verify no deprecated auth.role() policy patterns exist across all migrations
     expect(combinedSql.toLowerCase()).not.toContain('auth.role()');
 
     // Verify all tenant policies explicitly scope TO authenticated & (SELECT auth.uid())
@@ -80,6 +84,35 @@ describe('Supabase Configuration, RLS Policy Integrity, Admin Guard & Storage Se
     expect(hardeningSql).toContain('Account role cannot be self-modified');
     expect(hardeningSql).toContain('private.account_deletion_ledger');
     expect(hardeningSql).toContain('private.purge_expired_deleted_accounts');
+
+    // Verify 000003 domain model migration RLS, object-storage-only CHECKs, state triggers & private SKIP LOCKED functions
+    for (const table of [
+      'public.discovered_pages',
+      'public.analysis_results',
+      'public.implementation_prompts',
+      'public.export_records',
+      'public.job_events',
+    ]) {
+      expect(domainSql).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    }
+    expect(domainSql).toContain('GRANT SELECT, INSERT ON TABLE public.job_events TO authenticated');
+    expect(domainSql).toContain("NOT LIKE 'data:%'");
+    expect(domainSql).toContain('uq_analysis_jobs_user_idempotency');
+    expect(domainSql).toContain('idx_analysis_jobs_claim_queue');
+    expect(domainSql).toContain('private.enforce_analysis_job_transition()');
+    expect(domainSql).toContain('private.claim_next_analysis_job');
+    expect(domainSql).toContain('FOR UPDATE OF j SKIP LOCKED');
+    expect(domainSql).toContain('private.recover_stale_analysis_jobs()');
+    expect(domainSql).toContain('private.purge_expired_retention_data()');
+    expect(domainSql).toContain(
+      'REVOKE ALL ON FUNCTION private.claim_next_analysis_job(text, integer) FROM PUBLIC, anon, authenticated'
+    );
+    expect(domainSql).toContain(
+      'REVOKE ALL ON FUNCTION private.recover_stale_analysis_jobs() FROM PUBLIC, anon, authenticated'
+    );
+    expect(domainSql).toContain(
+      'REVOKE ALL ON FUNCTION private.purge_expired_retention_data() FROM PUBLIC, anon, authenticated'
+    );
   });
 
   it('should build RLS-compliant per-user folder artifact keys and scope Supabase Storage operations', async () => {

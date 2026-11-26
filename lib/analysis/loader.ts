@@ -193,6 +193,27 @@ export async function loadAnalysisDetailOrNotFound(
 
   const rawBlueprints = Array.isArray(job.blueprint_artifacts) ? job.blueprint_artifacts : [];
   const latestBlueprint = rawBlueprints[0];
+
+  const [normalizedPromptsRes, analysisResultRes, jobEventsRes] = await Promise.all([
+    latestBlueprint
+      ? supabase
+          .from('implementation_prompts')
+          .select('phase_number, target_tool, title, objective, prompt_markdown')
+          .eq('blueprint_id', latestBlueprint.id)
+          .order('phase_number', { ascending: true })
+      : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from('analysis_results')
+      .select('architecture_summary')
+      .eq('job_id', jobId)
+      .maybeSingle(),
+    supabase
+      .from('job_events')
+      .select('id, event_type, to_status, message, created_at')
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: true }),
+  ]);
+
   let blueprint: BlueprintArtifactView | null = null;
 
   if (latestBlueprint) {
@@ -212,7 +233,37 @@ export async function loadAnalysisDetailOrNotFound(
       latestBlueprint.recommended_stack,
       []
     );
-    const prompts = splitPromptMarkdownToPhases(latestBlueprint.antigravity_prompts);
+
+    const dbPrompts =
+      !normalizedPromptsRes.error &&
+      Array.isArray(normalizedPromptsRes.data) &&
+      normalizedPromptsRes.data.length > 0
+        ? normalizedPromptsRes.data
+        : null;
+
+    const prompts: PromptPhaseItem[] = dbPrompts
+      ? Array.from(
+          dbPrompts
+            .reduce((acc, row) => {
+              const existing = acc.get(row.phase_number);
+              if (!existing || row.target_tool === 'antigravity') {
+                acc.set(row.phase_number, {
+                  phase: row.phase_number,
+                  title: row.title,
+                  objective: row.objective,
+                  prompt: row.prompt_markdown,
+                });
+              }
+              return acc;
+            }, new Map<number, PromptPhaseItem>())
+            .values()
+        )
+      : splitPromptMarkdownToPhases(latestBlueprint.antigravity_prompts);
+
+    const resolvedSummary =
+      !analysisResultRes.error && analysisResultRes.data?.architecture_summary
+        ? analysisResultRes.data.architecture_summary
+        : 'Synthesized reconstruction specification generated from captured page evidence.';
 
     blueprint = {
       id: latestBlueprint.id,
@@ -220,7 +271,7 @@ export async function loadAnalysisDetailOrNotFound(
       isEditedByUser: latestBlueprint.is_edited_by_user,
       generatedAt: latestBlueprint.generated_at,
       updatedAt: latestBlueprint.updated_at,
-      summary: 'Synthesized reconstruction specification generated from captured page evidence.',
+      summary: resolvedSummary,
       designTokens: designSpec,
       components,
       interactions,
@@ -231,6 +282,29 @@ export async function loadAnalysisDetailOrNotFound(
   }
 
   const rawLogs = Array.isArray(job.job_audit_logs) ? job.job_audit_logs : [];
+  const rawEvents =
+    !jobEventsRes.error && Array.isArray(jobEventsRes.data) ? jobEventsRes.data : [];
+
+  const auditLogs =
+    rawLogs.length > 0
+      ? rawLogs.map((entry) => ({
+          id: entry.id,
+          stage: entry.stage,
+          level: (entry.level as 'INFO' | 'WARN' | 'ERROR') || 'INFO',
+          message: entry.message,
+          timestamp: entry.timestamp,
+        }))
+      : rawEvents.map((ev) => ({
+          id: ev.id,
+          stage: ev.to_status || ev.event_type,
+          level: (ev.event_type === 'JOB_FAILED'
+            ? 'ERROR'
+            : ev.event_type === 'JOB_CANCELLED' || ev.event_type === 'STALE_RECOVERED'
+            ? 'WARN'
+            : 'INFO') as 'INFO' | 'WARN' | 'ERROR',
+          message: ev.message,
+          timestamp: ev.created_at,
+        }));
 
   return {
     id: job.id,
@@ -251,12 +325,6 @@ export async function loadAnalysisDetailOrNotFound(
     isPreviewFixture: false,
     evidence,
     blueprint,
-    auditLogs: rawLogs.map((entry) => ({
-      id: entry.id,
-      stage: entry.stage,
-      level: (entry.level as 'INFO' | 'WARN' | 'ERROR') || 'INFO',
-      message: entry.message,
-      timestamp: entry.timestamp,
-    })),
+    auditLogs,
   };
 }

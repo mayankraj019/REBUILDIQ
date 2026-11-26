@@ -1,6 +1,6 @@
-// Prisma Schema for RebuildIQ (Production PostgreSQL)
-// See docs/DATABASE_DESIGN.md for entity relationships & indexes.
-// Local SQLite development schema is in prisma/schema.prisma.
+// Prisma Schema for RebuildIQ (Production PostgreSQL / Supabase Reference)
+// Matches Supabase PostgreSQL SQL migrations in supabase/migrations/000001..000003.
+// See docs/DATABASE_DESIGN.md for full Data Dictionary, RLS & rollback guidelines.
 
 datasource db {
   provider = "postgresql"
@@ -16,6 +16,13 @@ enum UserRole {
   ADMIN
 }
 
+enum PromptTargetTool {
+  antigravity
+  cursor
+  claude
+  generic
+}
+
 enum JobStatus {
   PENDING
   VALIDATING
@@ -29,10 +36,35 @@ enum JobStatus {
   CANCELLED
 }
 
+enum DiscoveredPageStatus {
+  DISCOVERED
+  QUEUED
+  INSPECTING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
 enum ViewportType {
   MOBILE
   TABLET
   DESKTOP
+}
+
+enum ExportFormat {
+  prompts_md
+  blueprint_md
+  blueprint_json
+  tailwind_ts
+  evidence_json
+  zip
+}
+
+enum ExportStatus {
+  PENDING
+  READY
+  FAILED
+  EXPIRED
 }
 
 enum LogLevel {
@@ -42,128 +74,268 @@ enum LogLevel {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  passwordHash String
-  name         String
-  role         UserRole      @default(USER)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String    @unique @db.VarChar(255)
+  name                String    @db.VarChar(100)
+  role                UserRole  @default(USER)
+  defaultPromptTarget String    @default("antigravity") @db.VarChar(20)
+  deletedAt           DateTime? @db.Timestamptz
+  deletionScheduledAt DateTime? @db.Timestamptz
+  deletionReason      String?
+  createdAt           DateTime  @default(now()) @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @db.Timestamptz
 
-  sessions     Session[]
-  analysisJobs AnalysisJob[]
+  sessions      UserSession[]
+  analysisJobs  AnalysisJob[]
+  exportRecords ExportRecord[]
 
+  @@index([deletedAt])
   @@map("users")
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt    DateTime
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
+model UserSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authSessionId String?   @map("auth_session_id") @db.Uuid
+  ipAddress     String?   @map("ip_address") @db.VarChar(45)
+  userAgent     String?   @map("user_agent")
+  authMethod    String    @default("password") @map("auth_method") @db.VarChar(40)
+  loggedInAt    DateTime  @default(now()) @map("logged_in_at") @db.Timestamptz
+  lastActiveAt  DateTime  @default(now()) @map("last_active_at") @db.Timestamptz
+  expiresAt     DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
 
-  @@index([userId, expiresAt])
-  @@index([sessionToken])
-  @@map("sessions")
+  @@index([userId, loggedInAt(sort: Desc)])
+  @@map("user_sessions")
 }
 
 model AnalysisJob {
-  id               String              @id @default(cuid())
-  userId           String
-  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  targetUrl        String              @db.VarChar(2048)
-  normalizedDomain String              @db.VarChar(255)
-  status           JobStatus           @default(PENDING)
-  progressPercent  Int                 @default(0)
-  crawlDepth       Int                 @default(1)
-  viewportsConfig  Json                // ["mobile", "tablet", "desktop"]
-  errorCode        String?             @db.VarChar(50)
-  errorMessage     String?
-  durationMs       Int?
-  startedAt        DateTime?
-  completedAt      DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUrl          String    @map("target_url") @db.VarChar(2048)
+  normalizedDomain   String    @map("normalized_domain") @db.VarChar(255)
+  status             JobStatus @default(PENDING)
+  progressPercent    Int       @default(0) @map("progress_percent")
+  crawlDepth         Int       @default(1) @map("crawl_depth")
+  viewportsConfig    Json      @map("viewports_config")
+  idempotencyKey     String?   @map("idempotency_key") @db.VarChar(128)
+  workerId           String?   @map("worker_id") @db.VarChar(128)
+  leaseExpiresAt     DateTime? @map("lease_expires_at") @db.Timestamptz
+  heartbeatAt        DateTime? @map("heartbeat_at") @db.Timestamptz
+  attemptCount       Int       @default(0) @map("attempt_count")
+  maxAttempts        Int       @default(3) @map("max_attempts")
+  errorCode          String?   @map("error_code") @db.VarChar(50)
+  errorMessage       String?   @map("error_message")
+  durationMs         Int?      @map("duration_ms")
+  startedAt          DateTime? @map("started_at") @db.Timestamptz
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz
+  cancellationReason String?   @map("cancellation_reason")
+  expiresAt          DateTime? @map("expires_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  pageEvidence       PageEvidence[]
-  blueprintArtifacts BlueprintArtifact[]
-  jobAuditLogs       JobAuditLog[]
+  discoveredPages       DiscoveredPage[]
+  pageEvidence          PageEvidence[]
+  analysisResult        AnalysisResult?
+  blueprintArtifacts    BlueprintArtifact[]
+  implementationPrompts ImplementationPrompt[]
+  exportRecords         ExportRecord[]
+  jobEvents             JobEvent[]
+  jobAuditLogs          JobAuditLog[]
 
+  @@unique([userId, idempotencyKey])
   @@index([userId, status])
   @@index([userId, createdAt(sort: Desc)])
   @@index([normalizedDomain])
+  @@index([status, leaseExpiresAt, createdAt])
+  @@index([expiresAt])
   @@map("analysis_jobs")
 }
 
+model DiscoveredPage {
+  id            String               @id @default(uuid()) @db.Uuid
+  jobId         String               @map("job_id") @db.Uuid
+  job           AnalysisJob          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  url           String               @db.VarChar(2048)
+  normalizedUrl String               @map("normalized_url") @db.VarChar(2048)
+  depth         Int                  @default(0)
+  httpStatus    Int?                 @map("http_status")
+  status        DiscoveredPageStatus @default(DISCOVERED)
+  isEntryPage   Boolean              @default(false) @map("is_entry_page")
+  errorCode     String?              @map("error_code") @db.VarChar(50)
+  discoveredAt  DateTime             @default(now()) @map("discovered_at") @db.Timestamptz
+  inspectedAt   DateTime?            @map("inspected_at") @db.Timestamptz
+
+  evidence      PageEvidence?
+
+  @@unique([jobId, normalizedUrl])
+  @@index([jobId, status])
+  @@map("discovered_pages")
+}
+
 model PageEvidence {
-  id                 String             @id @default(cuid())
-  jobId              String
-  job                AnalysisJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  pageUrl            String             @db.VarChar(2048)
-  pageTitle          String             @db.VarChar(500)
-  metaTags           Json
-  domStructure       Json
-  computedTypography Json
-  computedColors     Json
-  computedSpacing    Json
-  detectedComponents Json
-  domNodeCount       Int                @default(0)
-  extractedAt        DateTime           @default(now())
+  id                    String             @id @default(uuid()) @db.Uuid
+  jobId                 String             @map("job_id") @db.Uuid
+  job                   AnalysisJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  discoveredPageId      String?            @unique @map("discovered_page_id") @db.Uuid
+  discoveredPage        DiscoveredPage?    @relation(fields: [discoveredPageId], references: [id], onDelete: SetNull)
+  pageUrl               String             @map("page_url") @db.VarChar(2048)
+  pageTitle             String             @map("page_title") @db.VarChar(500)
+  metaTags              Json               @map("meta_tags")
+  domStructure          Json               @map("dom_structure")
+  computedTypography    Json               @map("computed_typography")
+  computedColors        Json               @map("computed_colors")
+  computedSpacing       Json               @map("computed_spacing")
+  detectedComponents    Json               @map("detected_components")
+  domNodeCount          Int                @default(0) @map("dom_node_count")
+  domSnapshotStorageKey String?            @map("dom_snapshot_storage_key") @db.VarChar(500)
+  extractedAt           DateTime           @default(now()) @map("extracted_at") @db.Timestamptz
 
-  screenshots        VisualScreenshot[]
+  screenshots           VisualScreenshot[]
 
+  @@unique([jobId, pageUrl])
   @@index([jobId])
   @@map("page_evidence")
 }
 
 model VisualScreenshot {
-  id            String       @id @default(cuid())
-  evidenceId    String
+  id            String       @id @default(uuid()) @db.Uuid
+  evidenceId    String       @map("evidence_id") @db.Uuid
   evidence      PageEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
-  viewportType  ViewportType
+  viewportType  ViewportType @map("viewport_type")
   width         Int
   height        Int
-  storageKey    String       @db.VarChar(500)
-  fileHash      String       @db.VarChar(64)
-  fileSizeBytes Int
-  mimeType      String       @default("image/png") @db.VarChar(50)
-  capturedAt    DateTime     @default(now())
+  storageBucket String       @default("rebuildiq-artifacts") @map("storage_bucket") @db.VarChar(100)
+  storageKey    String       @map("storage_key") @db.VarChar(500)
+  fileHash      String       @map("file_hash") @db.VarChar(64)
+  fileSizeBytes Int          @map("file_size_bytes")
+  mimeType      String       @default("image/png") @map("mime_type") @db.VarChar(50)
+  capturedAt    DateTime     @default(now()) @map("captured_at") @db.Timestamptz
 
+  @@unique([evidenceId, viewportType])
   @@index([evidenceId])
   @@map("visual_screenshots")
 }
 
-model BlueprintArtifact {
-  id                    String      @id @default(cuid())
-  jobId                 String
-  job                   AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  version               String      @default("1.0.0") @db.VarChar(20)
-  designSystemSpec      Json
-  componentArchitecture Json
-  stateInteractions     Json
-  recommendedStack      Json
-  antigravityPrompts    String
-  isEditedByUser        Boolean     @default(false)
-  generatedAt           DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+model AnalysisResult {
+  id                    String              @id @default(uuid()) @db.Uuid
+  jobId                 String              @unique @map("job_id") @db.Uuid
+  job                   AnalysisJob         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  provider              String              @db.VarChar(40)
+  modelName             String              @map("model_name") @db.VarChar(100)
+  architectureSummary   String              @map("architecture_summary")
+  detectedPatterns      Json                @map("detected_patterns")
+  designTokenSummary    Json                @map("design_token_summary")
+  evidenceCoverage      Json                @map("evidence_coverage")
+  confidenceScore       Decimal?            @map("confidence_score") @db.Decimal(4, 3)
+  rawArtifactStorageKey String?             @map("raw_artifact_storage_key") @db.VarChar(500)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
+  blueprints            BlueprintArtifact[]
+
+  @@map("analysis_results")
+}
+
+model BlueprintArtifact {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  jobId                 String                 @map("job_id") @db.Uuid
+  job                   AnalysisJob            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  analysisResultId      String?                @map("analysis_result_id") @db.Uuid
+  analysisResult        AnalysisResult?        @relation(fields: [analysisResultId], references: [id], onDelete: SetNull)
+  version               String                 @default("1.0.0") @db.VarChar(20)
+  designSystemSpec      Json                   @map("design_system_spec")
+  componentArchitecture Json                   @map("component_architecture")
+  stateInteractions     Json                   @map("state_interactions")
+  recommendedStack      Json                   @map("recommended_stack")
+  antigravityPrompts    String                 @map("antigravity_prompts")
+  blueprintStorageKey   String?                @map("blueprint_storage_key") @db.VarChar(500)
+  isEditedByUser        Boolean                @default(false) @map("is_edited_by_user")
+  generatedAt           DateTime               @default(now()) @map("generated_at") @db.Timestamptz
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  prompts               ImplementationPrompt[]
+
+  @@unique([jobId, version])
   @@index([jobId])
+  @@index([analysisResultId])
   @@map("blueprint_artifacts")
 }
 
+model ImplementationPrompt {
+  id             String            @id @default(uuid()) @db.Uuid
+  blueprintId    String            @map("blueprint_id") @db.Uuid
+  blueprint      BlueprintArtifact @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  jobId          String            @map("job_id") @db.Uuid
+  job            AnalysisJob       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  phaseNumber    Int               @map("phase_number")
+  targetTool     PromptTargetTool  @default(antigravity) @map("target_tool")
+  title          String            @db.VarChar(200)
+  objective      String            @db.VarChar(500)
+  promptMarkdown String            @map("prompt_markdown")
+  promptHash     String            @map("prompt_hash") @db.VarChar(64)
+  isEditedByUser Boolean           @default(false) @map("is_edited_by_user")
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now()) @db.Timestamptz
+  updatedAt      DateTime          @updatedAt @db.Timestamptz
+
+  @@unique([blueprintId, targetTool, phaseNumber])
+  @@index([jobId, targetTool])
+  @@map("implementation_prompts")
+}
+
+model ExportRecord {
+  id            String       @id @default(uuid()) @db.Uuid
+  jobId         String       @map("job_id") @db.Uuid
+  job           AnalysisJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId        String       @map("user_id") @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format        String       @db.VarChar(32)
+  storageKey    String?      @map("storage_key") @db.VarChar(500)
+  fileHash      String?      @map("file_hash") @db.VarChar(64)
+  fileSizeBytes Int?         @map("file_size_bytes")
+  status        ExportStatus @default(READY)
+  expiresAt     DateTime     @map("expires_at") @db.Timestamptz
+  downloadedAt  DateTime?    @map("downloaded_at") @db.Timestamptz
+  createdAt     DateTime     @default(now()) @db.Timestamptz
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([jobId, format])
+  @@index([expiresAt])
+  @@map("export_records")
+}
+
+model JobEvent {
+  id             String      @id @default(uuid()) @db.Uuid
+  jobId          String      @map("job_id") @db.Uuid
+  job            AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  eventType      String      @map("event_type") @db.VarChar(50)
+  fromStatus     String?     @map("from_status") @db.VarChar(40)
+  toStatus       String?     @map("to_status") @db.VarChar(40)
+  workerId       String?     @map("worker_id") @db.VarChar(128)
+  attemptNumber  Int         @default(0) @map("attempt_number")
+  message        String
+  metadata       Json?
+  idempotencyKey String?     @map("idempotency_key") @db.VarChar(128)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([jobId, idempotencyKey])
+  @@index([jobId, createdAt])
+  @@map("job_events")
+}
+
 model JobAuditLog {
-  id        String      @id @default(cuid())
-  jobId     String
+  id        String      @id @default(uuid()) @db.Uuid
+  jobId     String      @map("job_id") @db.Uuid
   job       AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   stage     String      @db.VarChar(50)
   level     LogLevel
   message   String
   metadata  Json?
-  timestamp DateTime    @default(now())
+  timestamp DateTime    @default(now()) @db.Timestamptz
 
   @@index([jobId, timestamp])
   @@map("job_audit_logs")
