@@ -1,114 +1,177 @@
 import React from 'react';
-import { ArrowRight, ShieldCheck, Cpu, Code2, Globe } from 'lucide-react';
+import Link from 'next/link';
+import { ShieldCheck, Layers, Code2, ArrowRight, Eye } from 'lucide-react';
+import { getServerSession } from '@/lib/auth/server';
+import { PublicHeader } from '@/components/layout/PublicHeader';
+import { LandingQuickForm } from '@/components/landing/LandingQuickForm';
 import { Logo } from '@/components/ui/Logo';
 
-export default function HomePage() {
-  return (
-    <main className="min-h-screen flex flex-col justify-between">
-      {/* Navigation Header */}
-      <header className="border-b border-cream-300 bg-white/80 backdrop-blur-none px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Logo variant="full" size="sm" asLink />
+export const dynamic = 'force-dynamic';
 
-          <div className="flex items-center space-x-4">
-            <a
-              href="/design-system"
-              className="text-xs font-medium text-navy-500 hover:text-coral-500 transition"
+export default async function HomePage() {
+  const session = await getServerSession();
+
+  return (
+    <div className="min-h-screen flex flex-col justify-between bg-cream-100 text-navy-500">
+      <PublicHeader user={session?.user ?? null} />
+
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-16 pb-16 sm:pt-24 sm:pb-20 text-center">
+          <p className="text-xs font-mono uppercase tracking-widest text-coral-600 font-semibold mb-4">
+            Website Architecture &amp; Reconstruction Intelligence
+          </p>
+
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-navy-500 leading-[1.12] mb-6">
+            Inspect any public web interface.
+            <br className="hidden sm:inline" /> Generate its rebuild blueprint.
+          </h1>
+
+          <p className="text-base sm:text-lg text-navy-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+            RebuildIQ runs isolated browser inspections to capture verified DOM structure and computed styles, then synthesizes implementation blueprints and phased Antigravity prompts without conflating facts with AI guesses.
+          </p>
+
+          <LandingQuickForm isAuthenticated={Boolean(session)} />
+
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-navy-400">
+            <Link
+              href={session ? '/analysis/preview' : '/register'}
+              className="inline-flex items-center space-x-1.5 font-medium text-navy-500 hover:text-coral-500 transition-colors"
             >
-              Design System
-            </a>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cream-200 text-navy-600 border border-cream-300">
-              Phase 2 Operational
-            </span>
-            <a
+              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{session ? 'Inspect Sample Workspace Preview' : 'Create free account'}</span>
+              <ArrowRight className="w-3 h-3" aria-hidden="true" />
+            </Link>
+            <span aria-hidden="true" className="text-cream-400">|</span>
+            <Link
               href="/api/health"
-              className="text-xs font-mono text-navy-400 hover:text-navy-600 transition"
               target="_blank"
               rel="noreferrer"
+              className="font-mono hover:text-navy-500 transition-colors"
             >
-              /api/health
-            </a>
+              System Health: /api/health
+            </Link>
           </div>
-        </div>
-      </header>
+        </section>
 
-      {/* Hero Section */}
-      <section className="max-w-4xl mx-auto px-6 py-20 text-center flex-1 flex flex-col justify-center">
-        <div className="inline-flex items-center justify-center px-3 py-1 mb-6 rounded-full text-xs font-medium bg-coral-50 text-coral-600 border border-coral-200 self-center">
-          Reverse-Engineer Any Web Interface into Clean Code
-        </div>
-
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-navy-500 mb-6">
-          Controlled Website Inspection &amp; Reconstruction Blueprints
-        </h1>
-
-        <p className="text-lg text-navy-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-          RebuildIQ inspects accessible websites using sandboxed browser automation, captures empirical visual ground truth, and synthesizes implementation-ready prompt packages for Antigravity.
-        </p>
-
-        {/* Input Bar */}
-        <div className="max-w-2xl mx-auto w-full bg-white rounded-lg border border-cream-300 p-2 shadow-sm flex items-center space-x-2">
-          <div className="pl-3 text-navy-300">
-            <Globe className="w-5 h-5" />
-          </div>
-          <input
-            type="url"
-            placeholder="https://example.com"
-            disabled
-            className="flex-1 px-3 py-2 text-sm text-navy-500 placeholder-navy-300 bg-transparent focus:outline-none"
-            defaultValue="https://rebuildiq.dev (UI Available in Phase 5)"
-          />
-          <button
-            type="button"
-            disabled
-            className="px-5 py-2.5 rounded bg-coral-500 hover:bg-coral-600 text-white font-medium text-sm flex items-center space-x-2 transition opacity-90 cursor-not-allowed"
-          >
-            <span>Analyze Site</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Feature Signals */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 text-left">
-          <div className="bg-white rounded-lg border border-cream-300 p-5">
-            <div className="w-8 h-8 rounded bg-navy-50 text-navy-500 flex items-center justify-center mb-3">
-              <ShieldCheck className="w-5 h-5 text-coral-500" />
+        {/* Workflow Band */}
+        <section
+          id="workflow"
+          className="border-t border-cream-300 bg-white py-16 sm:py-20 px-4 sm:px-6"
+        >
+          <div className="max-w-5xl mx-auto">
+            <div className="max-w-2xl mb-12">
+              <p className="text-xs font-mono uppercase tracking-wider text-coral-500 font-semibold mb-2">
+                Three-Stage Pipeline
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-navy-500">
+                Built for deterministic frontend reverse-engineering
+              </h2>
             </div>
-            <h3 className="font-semibold text-sm text-navy-500 mb-1">SSRF Firewall &amp; Isolation</h3>
-            <p className="text-xs text-navy-400 leading-relaxed">
-              Dual-layer pre-flight and socket route-level validation strictly blocking RFC 1918 and cloud metadata probes.
-            </p>
-          </div>
 
-          <div className="bg-white rounded-lg border border-cream-300 p-5">
-            <div className="w-8 h-8 rounded bg-navy-50 text-navy-500 flex items-center justify-center mb-3">
-              <Cpu className="w-5 h-5 text-coral-500" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-10">
+              <div className="space-y-3">
+                <div className="w-9 h-9 rounded-md bg-cream-100 border border-cream-300 flex items-center justify-center text-navy-500">
+                  <ShieldCheck className="w-4 h-4 text-coral-500" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-bold text-navy-500">
+                  1. Controlled Browser Capture
+                </h3>
+                <p className="text-sm text-navy-400 leading-relaxed">
+                  Target URLs pass pre-flight DNS checks and route-level SSRF filtering before Chromium extracts computed fonts, colors, spacing, and mobile/tablet/desktop screenshots.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="w-9 h-9 rounded-md bg-cream-100 border border-cream-300 flex items-center justify-center text-navy-500">
+                  <Layers className="w-4 h-4 text-coral-500" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-bold text-navy-500">
+                  2. Ground-Truth Separation
+                </h3>
+                <p className="text-sm text-navy-400 leading-relaxed">
+                  Empirical page evidence is isolated from LLM hypotheses inside strict schema boundaries so engineers always know what was measured vs. what is recommended.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="w-9 h-9 rounded-md bg-cream-100 border border-cream-300 flex items-center justify-center text-navy-500">
+                  <Code2 className="w-4 h-4 text-coral-500" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-bold text-navy-500">
+                  3. Phased Antigravity Prompts
+                </h3>
+                <p className="text-sm text-navy-400 leading-relaxed">
+                  Review inferred component hierarchies, edit phase prompts directly, and export Tailwind tokens, Markdown blueprints, or raw JSON bundles.
+                </p>
+              </div>
             </div>
-            <h3 className="font-semibold text-sm text-navy-500 mb-1">Empirical Ground Truth</h3>
-            <p className="text-xs text-navy-400 leading-relaxed">
-              Extracts computed typography, color palettes, and responsive viewports without conflating facts with AI inferences.
-            </p>
           </div>
+        </section>
 
-          <div className="bg-white rounded-lg border border-cream-300 p-5">
-            <div className="w-8 h-8 rounded bg-navy-50 text-navy-500 flex items-center justify-center mb-3">
-              <Code2 className="w-5 h-5 text-coral-500" />
+        {/* Observed vs Inference Contrast Band */}
+        <section
+          id="evidence-vs-inference"
+          className="border-t border-cream-300 bg-cream-100 py-16 sm:py-20 px-4 sm:px-6"
+        >
+          <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+            <div>
+              <p className="text-xs font-mono uppercase tracking-wider text-navy-400 font-semibold mb-2">
+                Architectural Boundary
+              </p>
+              <h2 className="text-2xl font-bold text-navy-500 mb-4">
+                Zero ambiguity between fact and suggestion
+              </h2>
+              <p className="text-sm text-navy-400 leading-relaxed mb-6">
+                Every analysis workspace separates verifiable measurements from AI architectural inference. Even while browser workers and AI synthesizers are being completed in upcoming backend phases, the interface never presents sample fixture data as a real scan.
+              </p>
+              <div className="flex items-center gap-4">
+                <Link
+                  href={session ? '/dashboard' : '/login'}
+                  className="text-sm font-semibold text-coral-600 hover:text-coral-700 inline-flex items-center space-x-1.5"
+                >
+                  <span>{session ? 'Open your workspace' : 'Sign in to workspace'}</span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
-            <h3 className="font-semibold text-sm text-navy-500 mb-1">Antigravity Prompt Packs</h3>
-            <p className="text-xs text-navy-400 leading-relaxed">
-              Structured 4-phase prompt synthesizers that feed directly into AI coding tools with verified design tokens.
-            </p>
-          </div>
-        </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="border-t border-cream-300 bg-white py-8 px-6">
+            <div className="bg-white rounded-lg border border-cream-300 divide-y divide-cream-200">
+              <div className="p-5">
+                <span className="inline-block text-[11px] font-mono font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 mb-2">
+                  Observed Ground Truth
+                </span>
+                <p className="text-sm text-navy-500 font-medium">
+                  Computed CSS styles, DOM hierarchy depth, palette hex frequencies, viewport dimensions, and captured page titles.
+                </p>
+              </div>
+              <div className="p-5">
+                <span className="inline-block text-[11px] font-mono font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 mb-2">
+                  AI-Inferred Blueprint
+                </span>
+                <p className="text-sm text-navy-500 font-medium">
+                  Component boundary decompositions, recommended stack pairings, state specs, and phased implementation prompts.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-cream-300 bg-white py-8 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-navy-400">
-          <Logo variant="horizontal" size="xs" asLink />
-          <p>&copy; {new Date().getFullYear()} RebuildIQ. Built for production-grade website reconstruction.</p>
+          <Logo variant="horizontal" size="xs" asLink href="/" />
+          <div className="flex items-center space-x-5">
+            <Link href="/design-system" className="hover:text-navy-500 transition-colors">
+              Design System
+            </Link>
+            <Link href="/login" className="hover:text-navy-500 transition-colors">
+              Sign in
+            </Link>
+            <span>&copy; {new Date().getFullYear()} RebuildIQ</span>
+          </div>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

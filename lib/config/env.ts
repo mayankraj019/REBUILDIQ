@@ -23,9 +23,11 @@ export const ServerEnvSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
 
-  // Storage
-  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  // Storage & Supabase
+  STORAGE_DRIVER: z.enum(['local', 's3', 'supabase']).default('supabase'),
   LOCAL_STORAGE_PATH: z.string().default('./storage'),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
 
   // Crawler / Worker Guardrails
   MAX_CONCURRENT_BROWSER_JOBS: z.coerce.number().default(2),
@@ -35,8 +37,8 @@ export const ServerEnvSchema = z.object({
   MAX_PAGES_PER_JOB: z.coerce.number().min(1).max(10).default(5),
   ENABLE_SSRF_FIREWALL: z
     .string()
-    .transform((val) => val === 'true')
-    .default('true'),
+    .default('true')
+    .transform((val) => val === 'true'),
 });
 
 /**

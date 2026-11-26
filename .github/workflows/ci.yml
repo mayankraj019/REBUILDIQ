@@ -16,6 +16,8 @@ jobs:
       DATABASE_URL: "file:./dev.db"
       SESSION_SECRET: "ci-testing-session-secret-at-least-32-chars-long"
       AI_PROVIDER: "mock"
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ci_test_key"
 
     steps:
       - name: Checkout Code

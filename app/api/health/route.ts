@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
-import { getServerEnv } from '@/lib/config/env';
+import { getSupabaseConfig, hasSupabaseConfig } from '@/lib/supabase/config';
 import { logger } from '@/lib/logger';
 
 export async function GET() {
@@ -8,14 +7,26 @@ export async function GET() {
   let dbStatus = 'ok';
   let dbLatencyMs = 0;
 
-  try {
-    const dbStart = Date.now();
-    // Execute a lightweight query to verify database connectivity
-    await prisma.$queryRaw`SELECT 1`;
-    dbLatencyMs = Date.now() - dbStart;
-  } catch (error) {
+  if (!hasSupabaseConfig()) {
     dbStatus = 'error';
-    logger.error('Health check database probe failed', error);
+  } else if (process.env.NODE_ENV !== 'test') {
+    const dbStart = Date.now();
+    try {
+      const { url, publishableKey } = getSupabaseConfig();
+      const res = await fetch(`${url}/auth/v1/health`, {
+        headers: { apikey: publishableKey },
+        signal: AbortSignal.timeout(4000),
+        cache: 'no-store',
+      });
+      dbLatencyMs = Date.now() - dbStart;
+      if (!res.ok) {
+        dbStatus = 'error';
+      }
+    } catch (error) {
+      dbStatus = 'error';
+      dbLatencyMs = Date.now() - dbStart;
+      logger.error('Health check Supabase probe failed', error);
+    }
   }
 
   const isHealthy = dbStatus === 'ok';
@@ -27,7 +38,11 @@ export async function GET() {
     uptimeSeconds: Math.floor(process.uptime()),
     subsystems: {
       api: { status: 'ok', responseTimeMs: Date.now() - startTime },
-      database: { status: dbStatus, latencyMs: dbLatencyMs },
+      database: {
+        status: dbStatus,
+        provider: 'supabase',
+        latencyMs: dbLatencyMs,
+      },
     },
     system: {
       memory: {

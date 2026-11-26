@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
-import { validateSession, SessionValidationResult } from './session';
-import { getSessionToken } from './cookies';
+import { createSupabaseRouteClient } from '@/lib/supabase/route';
+import { getServerSession } from './server';
 
 export class AuthError extends Error {
   code: string;
@@ -27,19 +26,73 @@ export class NotFoundError extends Error {
   }
 }
 
+export interface VerifiedAuthContext {
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+  };
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    createdAt: Date;
+  };
+}
+
 /**
- * Resolves the authenticated user from cookies or Authorization header.
- * Returns null if no valid session exists.
+ * Resolves the verified authenticated user from Supabase SSR cookies.
+ * Returns null if unauthenticated or token verification fails.
  */
 export async function getAuthenticatedUser(
   request?: NextRequest | null
-): Promise<SessionValidationResult | null> {
-  const token = getSessionToken(request);
-  if (!token) {
-    return null;
+): Promise<VerifiedAuthContext | null> {
+  if (!request) {
+    return getServerSession();
   }
 
-  return validateSession(token);
+  try {
+    const { supabase } = createSupabaseRouteClient(request);
+    const {
+      data: { user: authUser },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !authUser) {
+      return null;
+    }
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('id, email, name, role, created_at')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    const fallbackName =
+      (typeof authUser.user_metadata?.full_name === 'string' &&
+        authUser.user_metadata.full_name.trim()) ||
+      (authUser.email ? authUser.email.split('@')[0] : 'User');
+
+    return {
+      session: {
+        id: authUser.id,
+        userId: authUser.id,
+        expiresAt: new Date(Date.now() + 3600 * 1000),
+      },
+      user: {
+        id: profile?.id || authUser.id,
+        email: profile?.email || authUser.email || '',
+        name: profile?.name || fallbackName,
+        role: profile?.role || 'USER',
+        createdAt: profile?.created_at
+          ? new Date(profile.created_at)
+          : new Date(authUser.created_at),
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -48,7 +101,7 @@ export async function getAuthenticatedUser(
  */
 export async function requireAuth(
   request?: NextRequest | null
-): Promise<SessionValidationResult> {
+): Promise<VerifiedAuthContext> {
   const auth = await getAuthenticatedUser(request);
   if (!auth) {
     throw new AuthError('Authentication required to access this resource');
@@ -57,35 +110,32 @@ export async function requireAuth(
 }
 
 /**
- * Strict Multi-Tenant Authorization Guard:
- * Resolves an AnalysisJob by ID and verifies that the requesting user owns it.
- * If the job does not exist OR belongs to another user, returns NotFoundError (404)
- * to prevent leaking the existence of jobs across tenants.
+ * Strict Multi-Tenant Authorization Guard against Supabase Postgres (RLS + userId filter):
+ * Returns NotFoundError (404) if job does not exist or belongs to another user.
  */
 export async function requireJobOwnership(
   jobId: string,
-  userId: string
+  userId: string,
+  request?: NextRequest | null
 ) {
   if (!jobId || !userId) {
     throw new NotFoundError('Analysis job not found');
   }
 
-  const job = await prisma.analysisJob.findFirst({
-    where: {
-      id: jobId,
-      userId: userId, // Strict tenant scoping
-    },
-    include: {
-      pageEvidence: {
-        include: {
-          screenshots: true,
-        },
-      },
-      blueprintArtifacts: true,
-    },
-  });
+  const supabase = request
+    ? createSupabaseRouteClient(request).supabase
+    : await (await import('@/lib/supabase/server')).createSupabaseServerClient();
 
-  if (!job) {
+  const { data: job, error } = await supabase
+    .from('analysis_jobs')
+    .select(
+      '*, page_evidence(*, visual_screenshots(*)), blueprint_artifacts(*)'
+    )
+    .eq('id', jobId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error || !job) {
     throw new NotFoundError('Analysis job not found');
   }
 

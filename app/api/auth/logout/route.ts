@@ -1,21 +1,33 @@
 import { NextRequest } from 'next/server';
-import { getSessionToken, removeSessionCookie } from '@/lib/auth/cookies';
-import { revokeSession } from '@/lib/auth/session';
+import { createSupabaseRouteClient } from '@/lib/supabase/route';
 import { apiSuccess } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+
+const log = logger.forContext('AuthLogout');
 
 export async function POST(request: NextRequest) {
-  try {
-    const token = getSessionToken(request);
+  const { supabase, applyAuthResponseHeaders } = createSupabaseRouteClient(request);
 
-    if (token) {
-      await revokeSession(token);
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await supabase
+        .from('user_sessions')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .is('revoked_at', null);
     }
 
+    await supabase.auth.signOut();
+
     const response = apiSuccess({ message: 'Signed out successfully' });
-    return removeSessionCookie(response);
+    return applyAuthResponseHeaders(response);
   } catch (error) {
-    console.error('Logout error:', error);
+    log.error('Logout error', error);
     const response = apiSuccess({ message: 'Signed out successfully' });
-    return removeSessionCookie(response);
+    return applyAuthResponseHeaders(response);
   }
 }

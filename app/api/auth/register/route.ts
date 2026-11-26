@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
-import { hashPassword } from '@/lib/auth/password';
-import { createSession } from '@/lib/auth/session';
-import { attachSessionCookie } from '@/lib/auth/cookies';
+import { createSupabaseRouteClient } from '@/lib/supabase/route';
 import { RegisterInputSchema } from '@/lib/auth/schemas';
 import { apiSuccess, apiError } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+
+const log = logger.forContext('AuthRegister');
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,13 +21,49 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, name, password } = parsed.data;
+    const { supabase, applyAuthResponseHeaders } = createSupabaseRouteClient(request);
 
-    // Check for existing account
-    const existing = await prisma.user.findUnique({
-      where: { email },
+    const origin = request.nextUrl?.origin || process.env.APP_URL || 'http://localhost:3000';
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+        },
+        emailRedirectTo: `${origin}/auth/confirm`,
+      },
     });
 
-    if (existing) {
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (
+        error.status === 422 ||
+        msg.includes('already registered') ||
+        msg.includes('already exists')
+      ) {
+        return apiError(
+          'ACCOUNT_EXISTS',
+          'An account with this email address already exists',
+          409
+        );
+      }
+
+      log.warn('Supabase registration rejected', { code: error.code, status: error.status });
+      return apiError(
+        'REGISTRATION_FAILED',
+        error.message || 'Unable to register account',
+        error.status && error.status >= 400 && error.status < 500 ? error.status : 400
+      );
+    }
+
+    // Supabase obfuscates existing unconfirmed/duplicate accounts with empty identities array
+    if (
+      data.user &&
+      Array.isArray(data.user.identities) &&
+      data.user.identities.length === 0
+    ) {
       return apiError(
         'ACCOUNT_EXISTS',
         'An account with this email address already exists',
@@ -35,39 +71,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hash password with Argon2id
-    const passwordHash = await hashPassword(password);
+    if (!data.user) {
+      return apiError(
+        'REGISTRATION_FAILED',
+        'Account registration could not be completed',
+        400
+      );
+    }
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        passwordHash,
-        role: 'USER',
+    const requiresEmailConfirmation = !data.session;
+
+    // If session is issued immediately, record login event in public.user_sessions (RLS enforced)
+    if (data.session) {
+      const ipAddress = request.headers.get('x-forwarded-for') ?? null;
+      const userAgent = request.headers.get('user-agent')?.slice(0, 500) ?? null;
+      const expiresAt = data.session.expires_at
+        ? new Date(data.session.expires_at * 1000).toISOString()
+        : null;
+
+      await supabase.from('user_sessions').insert({
+        user_id: data.user.id,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        auth_method: 'register',
+        expires_at: expiresAt,
+      });
+    }
+
+    const response = apiSuccess(
+      {
+        user: {
+          id: data.user.id,
+          email: data.user.email || email,
+          name,
+          role: 'USER',
+          createdAt: data.user.created_at,
+        },
+        requiresEmailConfirmation,
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+      201
+    );
 
-    // Create session
-    const ipAddress = request.headers.get('x-forwarded-for') ?? null;
-    const userAgent = request.headers.get('user-agent') ?? null;
-
-    const { rawToken, expiresAt } = await createSession(user.id, {
-      ipAddress,
-      userAgent,
-    });
-
-    const response = apiSuccess({ user }, 201);
-    return attachSessionCookie(response, rawToken, expiresAt);
+    return applyAuthResponseHeaders(response);
   } catch (error) {
-    console.error('Registration error:', error);
+    log.error('Registration error', error);
     return apiError(
       'INTERNAL_SERVER_ERROR',
       'An unexpected error occurred during registration',

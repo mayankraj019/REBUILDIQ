@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
-import { verifyPassword } from '@/lib/auth/password';
-import { createSession } from '@/lib/auth/session';
-import { attachSessionCookie } from '@/lib/auth/cookies';
+import { createSupabaseRouteClient } from '@/lib/supabase/route';
 import { LoginInputSchema } from '@/lib/auth/schemas';
 import { apiSuccess, apiError } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+
+const log = logger.forContext('AuthLogin');
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,51 +21,65 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password } = parsed.data;
+    const { supabase, applyAuthResponseHeaders } = createSupabaseRouteClient(request);
 
-    // Query user
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
 
-    if (!user) {
-      return apiError(
-        'INVALID_CREDENTIALS',
-        'Invalid email or password',
-        401
-      );
+    if (error || !data.user || !data.session) {
+      const msg = (error?.message || '').toLowerCase();
+      if (msg.includes('email not confirmed')) {
+        return apiError(
+          'EMAIL_NOT_CONFIRMED',
+          'Please verify your email address via the confirmation link sent to your inbox before signing in.',
+          401
+        );
+      }
+      return apiError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
     }
 
-    const isValid = await verifyPassword(user.passwordHash, password);
-    if (!isValid) {
-      return apiError(
-        'INVALID_CREDENTIALS',
-        'Invalid email or password',
-        401
-      );
-    }
+    // Fetch synced public.users row (RLS scoped to authenticated uid)
+    const { data: profile } = await supabase
+      .from('users')
+      .select('id, email, name, role, created_at')
+      .eq('id', data.user.id)
+      .maybeSingle();
 
-    // Create session
+    const fallbackName =
+      (typeof data.user.user_metadata?.full_name === 'string' &&
+        data.user.user_metadata.full_name.trim()) ||
+      email.split('@')[0];
+
+    // Record login event & device details in Supabase public.user_sessions
     const ipAddress = request.headers.get('x-forwarded-for') ?? null;
-    const userAgent = request.headers.get('user-agent') ?? null;
+    const userAgent = request.headers.get('user-agent')?.slice(0, 500) ?? null;
+    const expiresAt = data.session.expires_at
+      ? new Date(data.session.expires_at * 1000).toISOString()
+      : null;
 
-    const { rawToken, expiresAt } = await createSession(user.id, {
-      ipAddress,
-      userAgent,
+    await supabase.from('user_sessions').insert({
+      user_id: data.user.id,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      auth_method: 'password',
+      expires_at: expiresAt,
     });
 
     const response = apiSuccess({
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        createdAt: user.createdAt,
+        id: profile?.id || data.user.id,
+        email: profile?.email || data.user.email || email,
+        name: profile?.name || fallbackName,
+        role: profile?.role || 'USER',
+        createdAt: profile?.created_at || data.user.created_at,
       },
     });
 
-    return attachSessionCookie(response, rawToken, expiresAt);
+    return applyAuthResponseHeaders(response);
   } catch (error) {
-    console.error('Login error:', error);
+    log.error('Login error', error);
     return apiError(
       'INTERNAL_SERVER_ERROR',
       'An unexpected error occurred during login',
