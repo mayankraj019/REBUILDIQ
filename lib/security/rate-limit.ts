@@ -34,7 +34,15 @@ const MAX_BUCKET_ENTRIES = 10_000;
 const slidingWindowBuckets = new Map<string, number[]>();
 
 function getHmacSecret(): string {
-  return process.env.SESSION_SECRET?.trim() || 'rebuildiq-rate-limit-dev-ephemeral-key';
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[rate-limit] SESSION_SECRET environment variable is required in production. ' +
+        'Set a random string of at least 32 characters.'
+    );
+  }
+  // Dev/test fallback — ephemeral and non-sensitive
+  return secret ?? 'rebuildiq-rate-limit-dev-ephemeral-key';
 }
 
 /**

@@ -22,7 +22,15 @@ export interface LoadedUserProfile {
 }
 
 function getAuditCookieSecret(): string {
-  return process.env.SESSION_SECRET?.trim() || 'rebuildiq-dev-session-audit-fallback-key';
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[session-audit] SESSION_SECRET environment variable is required in production. ' +
+        'Set a random string of at least 32 characters.'
+    );
+  }
+  // Dev/test fallback — ephemeral and non-sensitive
+  return secret ?? 'rebuildiq-dev-session-audit-fallback-key';
 }
 
 export function signSessionAuditToken(sessionRowId: string, userId: string): string {
